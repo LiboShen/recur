@@ -3,6 +3,7 @@
 
 use near_contract_standards::non_fungible_token::TokenId;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::bs58;
 use near_sdk::collections::{UnorderedMap, Vector};
 use near_sdk::serde::ser::SerializeTuple;
 use near_sdk::serde::{Deserialize, Serialize};
@@ -30,12 +31,13 @@ enum SubscriptionState {
 pub struct SubscriptionPlan {
     provider_id: AccountId, // plan provider
     //TODO: beneficier: AccountId,
-    payment_cycle: u64, // base payment cycle (e.g. hour, day, week) in the unit of seconds.
-    payment_rate: u64,  // cost for 1 payment cycle
-    payment_number: u64, // total number of paymens. 0 represent indefinte plan
+    payment_cycle_length: u64, // base payment cycle (e.g. hour, day, week) in the unit of seconds.
+    payment_cycle_rate: u64,   // cost for 1 payment cycle
+    payment_cycle_count: u64,  // total number of paymens. 0 represent indefinte plan
     // allow_grace_period: u64,    // TODO: grace period in seconds
     metadata: string,
-    prev_charge_ts: u64, // most recent charge of the plan
+    prev_charge_ts: u64, // most recent charge of the plan - used for calculating payment amount
+                         // set to 0 at initialisation
 }
 
 // Actual subscrtion instances based on SubscriptionPlan
@@ -77,7 +79,7 @@ impl Contract {
         self.subscription_plans_by_id.get(&plan_id)
     }
 
-    // function to get all subscription of a given plan
+    // get all subscriptions of a given plan
     pub fn list_subscriptions_by_plan_id(
         &mut self,
         plan_id: SubscriptionPlanID,
@@ -97,8 +99,11 @@ impl Contract {
 trait ProviderActions {
     pub fn create_plan(
         &mut self,
-        provider_id: AccountId,       // account that creat a plan
-        subscrtion_plan_info: string, // JSON string representing a plan details
+        provider_id: Option<AccountId>, // if none, use the caller accountid
+        payment_cycle_length: u64,
+        payment_cycle_rate: u64,
+        payment_cycle_count: u64,
+        metadata: Option<string>,
     ) -> SubscriptionPlanID;
 
     // collect fees from a chosen plan.
@@ -111,24 +116,79 @@ trait ProviderActions {
 
 trait SubscriberActions {
     pub fn create_subscription(&mut self, plan_id: SubscriptionPlanID) -> SubscriptionID;
-    
+
     pub fn cancel_subscription(&mut self, subscription_id: SubscriptionID) -> bool;
-    
+
     // function to deposit
-    // TODO: multi FT
+    // TODO: multi FTs
     pub fn deposit(&mut self, subscriber_id: AccountId, amount: u128) -> bool;
-    
+
     pub fn withdraw(&mut self, amount: u128);
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 impl ProviderActions for Contract {
     pub fn create_plan(
-            &mut self,
-            provider_id: AccountId,       // account that creat a plan
-            subscrtion_plan_info: string, // JSON string representing a plan details
-        ) -> SubscriptionPlanID {
-        
+        &mut self,
+        provider_id: Option<AccountId>, // if none, use the sending account id
+        payment_cycle_length: u64,
+        payment_cycle_rate: u64,
+        payment_cycle_count: u64,
+        metadata: Option<string>,
+    ) -> SubscriptionPlanID {
+        // if no provider is given, using the sender's account id
+        let a_provider_id = if let None = provider_id {
+            env::predecessor_account_id()
+        } else {
+            provider_id
+        };
+
+        assert_ge!(
+            payment_cycle_length,
+            60,
+            "Payment cycle needs to be longer than 1min!"
+        );
+
+        assert_gt!(payment_cycle_rate, 0, "Rate needs to be a postive number!");
+
+        assert_ge!(
+            payment_cycle_count,
+            0,
+            "Payment conunt needs to be non-negative! "
+        );
+
+        // create UUID for the plan
+        let curr_ts_str = env::block_timestamp().to_string();
+        let seed: Vec<u8> = provider_id.push_str(curr_ts_str).into_bytes();
+        let plan_id = bs58::encode(seed)
+            .with_alphabet(bs58::Alphabet::BITCOIN)
+            .into_string();
+
+        // initiate the struct and return
+        let a_plan = SubscriptionPlan {
+            provider_id: a_provider_id,
+            payment_cycle_length: payment_cycle_length,
+            payment_cycle_rate: payment_cycle_rate,
+            payment_cycle_count: payment_cycle_count,
+            metadata: metadata,
+            prev_charge_ts: 0,
+        };
+
+        // insert the plan into map
+        self.subscription_plans_by_id.insert(&plan_id, &a_plan);
+
+        return plan_id;
+    }
+
+    pub fn collect_fees(
+        &mut self,
+        plan_id: SubscriptionPlanID,
+    ) -> Vector<SerializeTuple<Subscription, bool>> {
+        let results: Vec<SerializeTuple<Subscription, bool>> = vec![];
+
+        for subscription_id in self.subscrtion_ids_by_plan_id.get(&plan_id).iter() {
+            let subscription = self.subscriptions_by_id.get(&subscription_id);
+        }
     }
 }
 
