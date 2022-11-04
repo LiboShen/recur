@@ -97,7 +97,7 @@ impl Contract {
 
 // functions related to to service provider
 trait ProviderActions {
-    pub fn create_plan(
+    pub fn create_subscription_plan(
         &mut self,
         provider_id: Option<AccountId>, // if none, use the caller accountid
         payment_cycle_length: u64,
@@ -119,8 +119,8 @@ trait SubscriberActions {
 
     pub fn cancel_subscription(&mut self, subscription_id: SubscriptionID) -> bool;
 
-    // function to deposit
-    // TODO: multi FTs
+    // function to deposit fund
+    // TODO: support multi FTs
     pub fn deposit(&mut self, subscriber_id: AccountId, amount: u128) -> bool;
 
     pub fn withdraw(&mut self, amount: u128);
@@ -128,7 +128,7 @@ trait SubscriberActions {
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 impl ProviderActions for Contract {
-    pub fn create_plan(
+    pub fn create_subscription_plan(
         &mut self,
         provider_id: Option<AccountId>, // if none, use the sending account id
         payment_cycle_length: u64,
@@ -180,6 +180,7 @@ impl ProviderActions for Contract {
         return plan_id;
     }
 
+    // TODO: support multi FTs
     pub fn collect_fees(
         &mut self,
         plan_id: SubscriptionPlanID,
