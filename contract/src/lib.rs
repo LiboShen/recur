@@ -4,7 +4,7 @@
 use near_contract_standards::non_fungible_token::TokenId;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::bs58;
-use near_sdk::collections::{UnorderedMap, Vector};
+use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
 use near_sdk::serde::ser::SerializeTuple;
 use near_sdk::serde::{Deserialize, Serialize};
 use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault};
@@ -14,7 +14,7 @@ type SubscriptionID = String;
 
 #[derive(BorshStorageKey, BorshSerialize)]
 enum StorageKey {
-    Subscrtions,
+    Subscrtion,
     SubscriptionPlan,
     SubscrtionIDs,
     Deposit,
@@ -28,18 +28,21 @@ enum SubscriptionState {
 }
 
 // Subscription template
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
 pub struct SubscriptionPlan {
     provider_id: AccountId, // plan provider
     //TODO: beneficier: AccountId,
     payment_cycle_length: u64, // base payment cycle (e.g. hour, day, week) in the unit of seconds.
-    payment_cycle_rate: u64,   // cost for 1 payment cycle
-    payment_cycle_count: u64,  // total number of paymens. 0 represent indefinte plan
+    payment_cycle_rate: u128,  // cost for 1 payment cycle
+    payment_cycle_count: u64,  // total number of paymens. 0 represents indefinte plan
     // allow_grace_period: u64,    // TODO: grace period in seconds
-    metadata: string,
+    plan_name: Option<String>, // name of the plan
     prev_charge_ts: u64, // most recent charge of the plan - used for calculating payment amount
                          // set to 0 at initialisation
 }
-
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
 // Actual subscrtion instances based on SubscriptionPlan
 pub struct Subscription {
     subscriber_id: AccountId,    // plan subscrtier
@@ -54,11 +57,11 @@ pub struct Subscription {
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
 pub struct Contract {
     owner: AccountId, // service owner
-    subscription_plans_by_id: UnorderedMap<SubscriptionPlanID, SubscriptionPlan>,
-    subscriptions_by_id: UnorderedMap<SubscriptionID, Subscription>,
-    subscrtion_ids_by_plan_id: LookupMap<SubscrtionPlanID, UnorderedSet<SubscriptionID>>, // helper structure for viewing
-    deposit_map: UnorderedMap<AccountId, u128>, // subscriber and their deposit
-                                                //TODO: deposit_map_multi_token: UnorderedMap<AccountId, UnorderedMap<AccountId, u128>>
+    subscription_plan_by_id: UnorderedMap<SubscriptionPlanID, SubscriptionPlan>,
+    subscription_by_id: UnorderedMap<SubscriptionID, Subscription>,
+    subscrtion_ids_by_plan_id: LookupMap<SubscriptionPlanID, UnorderedSet<SubscriptionID>>, // helper structure for viewing
+    deposit_per_account: UnorderedMap<AccountId, u128>, // subscriber and their deposit
+                                                        //TODO: deposit_map_multi_token: UnorderedMap<AccountId, UnorderedMap<AccountId, u128>>
 }
 
 #[near_bindgen]
@@ -66,101 +69,108 @@ impl Contract {
     #[init]
     pub fn new(owner_id: AccountId) -> Self {
         assert!(!env::state_exists(), "Already initialized");
-        Self {
+        let this = Self {
             owner: owner_id,
-            subscription_plans_by_id: UnorderedMap::new(StorageKey::SubscriptionPlan),
-            subscriptions_by_id: UnorderedMap::new(StorageKey::Subscrtions),
-            subscrtion_ids_by_plan_id: LookupMap::new(StorageKey::SubscrtionIDs),
-            deposit_map: UnorderedMap::new(StorageKey::Deposit),
-        }
+            subscription_plan_by_id: UnorderedMap::new(StorageKey::SubscriptionPlan),
+            subscription_by_id: UnorderedMap::new(StorageKey::Subscrtion),
+            subscrtion_ids_by_plan_id: LookupMap::new(
+                StorageKey::SubscrtionIDs.try_to_vec().unwrap(),
+            ),
+            deposit_per_account: UnorderedMap::new(StorageKey::Deposit),
+        };
+        this
     }
 
-    pub fn get_plan(&mut self, plan_id: SubscriptionPlanID) -> Option<Subscription> {
-        self.subscription_plans_by_id.get(&plan_id)
+    pub fn get_plan(&mut self, plan_id: SubscriptionPlanID) -> Option<SubscriptionPlan> {
+        self.subscription_plan_by_id.get(&plan_id)
     }
 
     // get all subscriptions of a given plan
     pub fn list_subscriptions_by_plan_id(
         &mut self,
         plan_id: SubscriptionPlanID,
-    ) -> Option<Vector<(SubscriptionID, Subscription)>> {
+    ) -> Vec<(SubscriptionID, Subscription)> {
         let mut results: Vec<(SubscriptionID, Subscription)> = vec![];
-        for id in self.subscrtion_ids_by_plan_id.get(&plan_id).iter() {
-            results.push((id, self.subscriptions_by_id.get(&id)))
+
+        let ids = self.subscrtion_ids_by_plan_id.get(&plan_id);
+        if ids.is_some() {
+            for id in ids.iter() {
+                let sub = self.subscription_by_id.get(id).unwrap();
+                results.push(id, sub);
+            }
         }
-        results
+        return results;
     }
 
     // check if a subscriber has enough funds
-    pub fn validate_subscription(&mut self, subscription_id: SubscriptionID) -> bool;
+    /*     pub fn validate_subscription(&mut self, subscription_id: SubscriptionID) {
+        1
+    } */
 }
 
 // functions related to to service provider
-trait ProviderActions {
-    pub fn create_subscription_plan(
+pub trait ProviderActions {
+    fn create_subscription_plan(
         &mut self,
         provider_id: Option<AccountId>, // if none, use the caller accountid
         payment_cycle_length: u64,
-        payment_cycle_rate: u64,
+        payment_cycle_rate: u128,
         payment_cycle_count: u64,
-        metadata: Option<string>,
+        metadata: Option<String>,
     ) -> SubscriptionPlanID;
 
     // collect fees from a chosen plan.
     // return a list of tuple indicating the subscrtion and if the charge succeeds
-    pub fn collect_fees(
-        &mut self,
-        plan_id: SubscriptionPlanID,
-    ) -> Vector<SerializeTuple<Subscription, bool>>;
+    fn collect_fees(&mut self, plan_id: SubscriptionPlanID) -> Vec<(Subscription, bool)>;
 }
 
-trait SubscriberActions {
-    pub fn create_subscription(&mut self, plan_id: SubscriptionPlanID) -> SubscriptionID;
+pub trait SubscriberActions {
+    fn create_subscription(&mut self, plan_id: SubscriptionPlanID) -> SubscriptionID;
 
-    pub fn cancel_subscription(&mut self, subscription_id: SubscriptionID) -> bool;
+    fn cancel_subscription(&mut self, subscription_id: SubscriptionID);
 
     // function to deposit fund
     // TODO: support multi FTs
-    pub fn deposit(&mut self, subscriber_id: AccountId, amount: u128) -> bool;
+    fn deposit(&mut self, subscriber_id: AccountId, amount: u128);
 
-    pub fn withdraw(&mut self, amount: u128);
+    fn withdraw(&mut self, amount: u128);
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 impl ProviderActions for Contract {
-    pub fn create_subscription_plan(
+    fn create_subscription_plan(
         &mut self,
         provider_id: Option<AccountId>, // if none, use the sending account id
         payment_cycle_length: u64,
-        payment_cycle_rate: u64,
+        payment_cycle_rate: u128,
         payment_cycle_count: u64,
-        metadata: Option<string>,
+        metadata: Option<String>,
     ) -> SubscriptionPlanID {
         // if no provider is given, using the sender's account id
-        let a_provider_id = if let None = provider_id {
+        let a_provider_id: AccountId = if let None = provider_id {
             env::predecessor_account_id()
         } else {
-            provider_id
+            provider_id.unwrap()
         };
 
-        assert_ge!(
-            payment_cycle_length,
-            60,
-            "Payment cycle needs to be longer than 1min!"
+        assert!(
+            payment_cycle_length >= 60,
+            "Payment cycle needs to be not less than 1 min!"
         );
 
-        assert_gt!(payment_cycle_rate, 0, "Rate needs to be a postive number!");
+        assert!(payment_cycle_rate > 0, "Rate needs to be a postive number!");
 
-        assert_ge!(
-            payment_cycle_count,
-            0,
-            "Payment conunt needs to be non-negative! "
+        assert!(
+            payment_cycle_count >= 0,
+            "Payment count needs to be non-negative! "
         );
 
-        // create UUID for the plan
-        let curr_ts_str = env::block_timestamp().to_string();
-        let seed: Vec<u8> = provider_id.push_str(curr_ts_str).into_bytes();
-        let plan_id = bs58::encode(seed)
+        // create plan ID
+        let curr_ts_string = env::block_timestamp().to_string();
+        let mut seed = a_provider_id.as_str().to_owned();
+        seed.push_str(&curr_ts_string);
+
+        let plan_id = bs58::encode(seed.into_bytes())
             .with_alphabet(bs58::Alphabet::BITCOIN)
             .into_string();
 
@@ -170,26 +180,36 @@ impl ProviderActions for Contract {
             payment_cycle_length: payment_cycle_length,
             payment_cycle_rate: payment_cycle_rate,
             payment_cycle_count: payment_cycle_count,
-            metadata: metadata,
+            plan_name: metadata,
             prev_charge_ts: 0,
         };
 
         // insert the plan into map
-        self.subscription_plans_by_id.insert(&plan_id, &a_plan);
+        self.subscription_plan_by_id.insert(&plan_id, &a_plan);
 
         return plan_id;
     }
 
     // TODO: support multi FTs
-    pub fn collect_fees(
-        &mut self,
-        plan_id: SubscriptionPlanID,
-    ) -> Vector<SerializeTuple<Subscription, bool>> {
-        let results: Vec<SerializeTuple<Subscription, bool>> = vec![];
+    fn collect_fees(&mut self, plan_id: SubscriptionPlanID) -> Vec<(Subscription, bool)> {
+        /* collect fees from all valid subscrtion of a given plan:
+        For each subscrtion of a plan:
+            1. check if the subscription is active
+            2. check if payments number exceeds count
+            3. calcuate the payment and check if the deposit is enough
+            4. record the valid amount and the correct charge state
 
+        transfer the total amount to provider
+
+         */
+
+        let results: Vec<(Subscription, bool)> = vec![];
+        /*
         for subscription_id in self.subscrtion_ids_by_plan_id.get(&plan_id).iter() {
             let subscription = self.subscriptions_by_id.get(&subscription_id);
-        }
+        } */
+
+        results
     }
 }
 
