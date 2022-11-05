@@ -60,7 +60,7 @@ pub struct Contract {
     subscription_plan_by_id: UnorderedMap<SubscriptionPlanID, SubscriptionPlan>,
     subscription_by_id: UnorderedMap<SubscriptionID, Subscription>,
     subscrtion_ids_by_plan_id: LookupMap<SubscriptionPlanID, UnorderedSet<SubscriptionID>>, // helper structure for viewing
-    deposit_per_account: UnorderedMap<AccountId, u128>, // subscriber and their deposit
+    fund_per_account: UnorderedMap<AccountId, (u128, u128)>, // subscriber and their (deposit, locked_amount) locked amount, payment due
                                                         //TODO: deposit_map_multi_token: UnorderedMap<AccountId, UnorderedMap<AccountId, u128>>
 }
 
@@ -103,9 +103,8 @@ impl Contract {
     }
 
     // check if a subscriber has enough funds
-    /*     pub fn validate_subscription(&mut self, subscription_id: SubscriptionID) {
-        1
-    } */
+    pub fn validate_subscription(&mut self, subscription_id: SubscriptionID) {    
+    };
 }
 
 // functions related to to service provider
@@ -202,14 +201,6 @@ impl ProviderActions for Contract {
         transfer the total amount to provider
 
          */
-
-        let results: Vec<(Subscription, bool)> = vec![];
-        /*
-        for subscription_id in self.subscrtion_ids_by_plan_id.get(&plan_id).iter() {
-            let subscription = self.subscriptions_by_id.get(&subscription_id);
-        } */
-
-        results
     }
 }
 
