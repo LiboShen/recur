@@ -52,6 +52,13 @@ pub struct Subscription {
     start_ts: u64,            // start of this subscrtion
 }
 
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct Fund {
+    deposit: u128,       // total deposit
+    locked_amount: u128, // payment occured but haven't being taken
+}
+
 //Subscription Service Contract
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
@@ -60,8 +67,8 @@ pub struct Contract {
     subscription_plan_by_id: UnorderedMap<SubscriptionPlanID, SubscriptionPlan>,
     subscription_by_id: UnorderedMap<SubscriptionID, Subscription>,
     subscrtion_ids_by_plan_id: LookupMap<SubscriptionPlanID, UnorderedSet<SubscriptionID>>, // helper structure for viewing
-    fund_per_account: UnorderedMap<AccountId, (u128, u128)>, // subscriber and their (deposit, locked_amount) locked amount, payment due
-                                                        //TODO: deposit_map_multi_token: UnorderedMap<AccountId, UnorderedMap<AccountId, u128>>
+    fund_per_account: UnorderedMap<AccountId, Fund>, // subscriber and her fund (deposit, locked_amount)
+    //TODO: deposit_map_multi_token: UnorderedMap<AccountId, UnorderedMap<AccountId, u128>>
 }
 
 #[near_bindgen]
@@ -76,7 +83,7 @@ impl Contract {
             subscrtion_ids_by_plan_id: LookupMap::new(
                 StorageKey::SubscrtionIDs.try_to_vec().unwrap(),
             ),
-            deposit_per_account: UnorderedMap::new(StorageKey::Deposit),
+            fund_per_account: UnorderedMap::new(StorageKey::Deposit),
         };
         this
     }
@@ -103,7 +110,7 @@ impl Contract {
     }
 
     // check if a subscriber has enough funds
-    pub fn validate_subscription(&mut self, subscription_id: SubscriptionID) {  
+    pub fn validate_subscription(&mut self, subscription_id: SubscriptionID) {
         todo!()
     }
 }
