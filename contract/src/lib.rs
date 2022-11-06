@@ -103,8 +103,9 @@ impl Contract {
     }
 
     // check if a subscriber has enough funds
-    pub fn validate_subscription(&mut self, subscription_id: SubscriptionID) {    
-    };
+    pub fn validate_subscription(&mut self, subscription_id: SubscriptionID) {  
+        todo!()
+    }
 }
 
 // functions related to to service provider
@@ -201,6 +202,7 @@ impl ProviderActions for Contract {
         transfer the total amount to provider
 
          */
+        todo!()
     }
 }
 
