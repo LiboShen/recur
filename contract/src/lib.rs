@@ -45,7 +45,7 @@ pub struct SubscriptionPlan {
 }
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
-// Actual subscrtion instances based on SubscriptionPlan
+// Actual subscription instance based on SubscriptionPlan
 pub struct Subscription {
     subscriber_id: AccountId,    // plan subscrtier
     plan_id: SubscriptionPlanID, // which plan is scubribed to
@@ -364,9 +364,12 @@ impl SubscriberActions for Contract {
 
     // function to withraw unlocked deposit
     fn withdraw(&mut self, amount: u128) {
-        // 1. get all subscrtions of current subscriber
-        // 2. calculate total cost.
-        // 3. return the valid amount
+        // 1. get total cost from all subscrtions
+        // 2. find withdrawable amount = deposit - total_cost
+        // if amount < withdrawable_amount: 
+        //          transfer the money
+        //          update the deposit table
+        // else: panic
 
         todo!()
     }
