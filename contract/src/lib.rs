@@ -7,7 +7,7 @@ use near_sdk::bs58;
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
 use near_sdk::serde::ser::SerializeTuple;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault};
+use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, CryptoHash, PanicOnDefault};
 
 type SubscriptionPlanID = String; // ID for each subscrtion plan
 type SubscriptionID = String;
@@ -17,7 +17,8 @@ enum StorageKey {
     SubscrtionById,
     SubscriptionPlanById,
     SubscrtionIdsByPlan,
-    SubscrtipsPerSubscriber,
+    SubscriptionsPerSubscriber,
+    SubscriptionsPerSubscriberInner { account_id_hash: CryptoHash },
     DepositByAccount,
 }
 
@@ -79,7 +80,7 @@ impl Contract {
                 StorageKey::SubscrtionIdsByPlan.try_to_vec().unwrap(),
             ),
             subscriptions_per_subscriber: LookupMap::new(
-                StorageKey::SubscrtipsPerSubscriber.try_to_vec().unwrap(),
+                StorageKey::SubscriptionsPerSubscriber.try_to_vec().unwrap(),
             ),
             deposit_by_account: UnorderedMap::new(StorageKey::DepositByAccount),
         };
@@ -104,7 +105,7 @@ impl Contract {
         let ids = self.subscription_ids_by_plan_id.get(&plan_id).unwrap();
         for id in ids.iter() {
             let sub = self.subscription_by_id.get(&id).unwrap();
-            results.push(id, sub);
+            results.push((id, sub));
         }
         return results;
     }
@@ -119,9 +120,9 @@ impl Contract {
         let mut balance = self
             .deposit_by_account
             .get(&account)
-            .expect(format!("No such account {}!", account.to_string()));
+            .expect("No such account!");
 
-        return &balance;
+        return balance;
     }
 
     // function to calculate the cost of one subscription
@@ -137,11 +138,11 @@ impl Contract {
             .get(&subscription.plan_id)
             .unwrap();
         let curr_ts = env::block_timestamp();
-        let duration = (curr_ts - subscription.start_ts);
+        let duration = curr_ts - subscription.start_ts;
         let count_cycle = 1 + duration / &plan.payment_cycle_length;
 
         cost = (count_cycle as u128) * &plan.payment_cycle_rate;
-        return &cost;
+        return cost;
     }
 
     // function to calcuate all subscrtions cost from a subscriber
@@ -190,12 +191,13 @@ impl ProviderActions for Contract {
         payment_cycle_count: u64,
         plan_name: Option<String>,
     ) -> SubscriptionPlanID {
+
         // if no provider is given, using the sender's account id
         let a_provider_id = provider_id
             // convert the valid provider ID into an account ID
             .map(|a| a.into())
             // if no provider id is given, simply use the caller's ID
-            .unwrap_or_else(env::predecessor_account_id());
+            .unwrap_or_else(env::predecessor_account_id);
 
         assert!(
             payment_cycle_length >= 60,
@@ -220,10 +222,10 @@ impl ProviderActions for Contract {
 
         // initiate the struct and return
         let a_plan = SubscriptionPlan {
-            provider_id: &a_provider_id,
-            payment_cycle_length: &payment_cycle_length,
-            payment_cycle_rate: &payment_cycle_rate,
-            payment_cycle_count: &payment_cycle_count,
+            provider_id: a_provider_id,
+            payment_cycle_length: payment_cycle_length,
+            payment_cycle_rate: payment_cycle_rate,
+            payment_cycle_count: payment_cycle_count,
             plan_name: plan_name,
             prev_charge_ts: 0,
         };
@@ -253,6 +255,9 @@ impl ProviderActions for Contract {
 #[near_bindgen]
 impl SubscriberActions for Contract {
     fn create_subscription(&mut self, plan_id: SubscriptionPlanID) -> SubscriptionID {
+        // subscription can only be created by own account
+        let subscriber: AccountId = env::predecessor_account_id();
+
         // get the plan
         let plan = self
             .subscription_plan_by_id
@@ -264,16 +269,12 @@ impl SubscriberActions for Contract {
             .deposit_by_account
             .get(&subscriber)
             .expect("Deposit first before creating subscrptions!");
-        assert!(
-            balance >= &plan.payment_cycle_rate,
-            format!(
-                "Deposit is not enough for first payment {}",
-                &plan.payment_cycle_rate
-            )
-        );
 
-        // subscription can only be created by own account
-        let subscriber: AccountId = env::predecessor_account_id();
+        assert!(
+            balance >= plan.payment_cycle_rate,
+            "Deposit is not enough for first payment {rate}",
+            rate = &plan.payment_cycle_rate
+        );
 
         // generate an id
         let curr_ts_string = env::block_timestamp().to_string();
@@ -287,7 +288,7 @@ impl SubscriberActions for Contract {
         // create the subscription
         let a_subscription = Subscription {
             subscriber_id: subscriber,
-            plan_id: &plan_id,
+            plan_id: plan_id,
             state: SubscriptionState::Active,
             start_ts: env::block_timestamp(),
         };
@@ -312,7 +313,7 @@ impl SubscriberActions for Contract {
             .get(&subscriber)
             .unwrap_or_else(|| {
                 UnorderedSet::new(
-                    StorageKey::SubscrtipsPerSubscriber {
+                    StorageKey::SubscriptionsPerSubscriberInner {
                         //get a new unique prefix for the set
                         account_id_hash: hash_account_id(&subscriber),
                     }
@@ -320,11 +321,10 @@ impl SubscriberActions for Contract {
                     .unwrap(),
                 )
             });
-        subscriptions_ids_set_2.insert(&subscriptions_id);
+        subscriptions_ids_set_2.insert(&subscription_id);
         self.subscriptions_per_subscriber
             .insert(&subscriber, &subscriptions_ids_set_2);
 
-            
         return subscription_id;
     }
 
@@ -338,7 +338,7 @@ impl SubscriberActions for Contract {
 
         // get balance of the account, if the account is not in the map, default the balance to 0
         let mut balance: u128 = self.deposit_by_account.get(&subscriber_id).unwrap_or(0);
-        balance += deposit;
+        balance += &amount;
         self.deposit_by_account.insert(&subscriber_id, &balance);
     }
 
