@@ -1,7 +1,7 @@
 // TODO: Beneficier
 // TODO: NFT contract
 
-use near_contract_standards::non_fungible_token::TokenId;
+use near_contract_standards::non_fungible_token::{hash_account_id, TokenId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::bs58;
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
@@ -14,10 +14,11 @@ type SubscriptionID = String;
 
 #[derive(BorshStorageKey, BorshSerialize)]
 enum StorageKey {
-    Subscrtion,
-    SubscriptionPlan,
-    SubscrtionIDs,
-    Deposit,
+    SubscrtionById,
+    SubscriptionPlanById,
+    SubscrtionIdsByPlan,
+    SubscrtipsPerSubscriber,
+    DepositByAccount,
 }
 
 #[derive(BorshDeserialize, BorshSerialize, Serialize, PartialEq)]
@@ -59,7 +60,8 @@ pub struct Contract {
     owner: AccountId, // service owner
     subscription_plan_by_id: UnorderedMap<SubscriptionPlanID, SubscriptionPlan>,
     subscription_by_id: UnorderedMap<SubscriptionID, Subscription>,
-    subscrtion_ids_by_plan_id: LookupMap<SubscriptionPlanID, UnorderedSet<SubscriptionID>>, // helper structure for viewing
+    subscription_ids_by_plan_id: LookupMap<SubscriptionPlanID, UnorderedSet<SubscriptionID>>, // helper structure for viewing
+    subscriptions_per_subscriber: LookupMap<AccountId, UnorderedSet<SubscriptionID>>, // heper structure to group all subscrtions under one user
     deposit_by_account: UnorderedMap<AccountId, u128>, // subscriber and her deposit
                                                        //TODO: deposit_map_multi_token: UnorderedMap<AccountId, UnorderedMap<AccountId, u128>>
 }
@@ -71,12 +73,15 @@ impl Contract {
         assert!(!env::state_exists(), "Already initialized");
         let this = Self {
             owner: owner_id,
-            subscription_plan_by_id: UnorderedMap::new(StorageKey::SubscriptionPlan),
-            subscription_by_id: UnorderedMap::new(StorageKey::Subscrtion),
-            subscrtion_ids_by_plan_id: LookupMap::new(
-                StorageKey::SubscrtionIDs.try_to_vec().unwrap(),
+            subscription_plan_by_id: UnorderedMap::new(StorageKey::SubscriptionPlanById),
+            subscription_by_id: UnorderedMap::new(StorageKey::SubscrtionById),
+            subscription_ids_by_plan_id: LookupMap::new(
+                StorageKey::SubscrtionIdsByPlan.try_to_vec().unwrap(),
             ),
-            deposit_by_account: UnorderedMap::new(StorageKey::Deposit),
+            subscriptions_per_subscriber: LookupMap::new(
+                StorageKey::SubscrtipsPerSubscriber.try_to_vec().unwrap(),
+            ),
+            deposit_by_account: UnorderedMap::new(StorageKey::DepositByAccount),
         };
         this
     }
@@ -96,7 +101,7 @@ impl Contract {
     ) -> Vec<(SubscriptionID, Subscription)> {
         let mut results: Vec<(SubscriptionID, Subscription)> = vec![];
 
-        let ids = self.subscrtion_ids_by_plan_id.get(&plan_id).unwrap();
+        let ids = self.subscription_ids_by_plan_id.get(&plan_id).unwrap();
         for id in ids.iter() {
             let sub = self.subscription_by_id.get(&id).unwrap();
             results.push(id, sub);
@@ -119,6 +124,7 @@ impl Contract {
         return &balance;
     }
 
+    // function to calculate the cost of one subscription
     fn calcuate_subscription_cost(&mut self, subscription_id: SubscriptionID) -> u128 {
         let subscription = self
             .subscription_by_id
@@ -136,6 +142,13 @@ impl Contract {
 
         cost = (count_cycle as u128) * &plan.payment_cycle_rate;
         return &cost;
+    }
+
+    // function to calcuate all subscrtions cost from a subscriber
+    fn calculate_total_cost_of_a_subscriber(&mut self, subscriber_id: AccountId) -> u128 {
+        //1. get all subscritons of one user
+        //2. accumulate cost from all active subscriptions
+        todo!()
     }
 }
 
@@ -279,10 +292,39 @@ impl SubscriberActions for Contract {
             start_ts: env::block_timestamp(),
         };
 
-        //record the new subscription
+        //record the new subscription in relevant indices
         self.subscription_by_id
             .insert(&subscription_id, &a_subscription);
 
+        let mut subscriptions_ids_set = self
+            .subscription_ids_by_plan_id
+            .get(&plan_id)
+            .unwrap_or_else(|| {
+                // if the plan doesn't have any subscriptions, we create a new unordered set
+                UnorderedSet::new(StorageKey::SubscrtionIdsByPlan.try_to_vec().unwrap())
+            });
+        subscriptions_ids_set.insert(&subscription_id);
+        self.subscription_ids_by_plan_id
+            .insert(&plan_id, &subscriptions_ids_set);
+
+        let mut subscriptions_ids_set_2 = self
+            .subscriptions_per_subscriber
+            .get(&subscriber)
+            .unwrap_or_else(|| {
+                UnorderedSet::new(
+                    StorageKey::SubscrtipsPerSubscriber {
+                        //get a new unique prefix for the set
+                        account_id_hash: hash_account_id(&subscriber),
+                    }
+                    .try_to_vec()
+                    .unwrap(),
+                )
+            });
+        subscriptions_ids_set_2.insert(&subscriptions_id);
+        self.subscriptions_per_subscriber
+            .insert(&subscriber, &subscriptions_ids_set_2);
+
+            
         return subscription_id;
     }
 
@@ -300,7 +342,12 @@ impl SubscriberActions for Contract {
         self.deposit_by_account.insert(&subscriber_id, &balance);
     }
 
+    // function to withraw unlocked deposit
     fn withdraw(&mut self, amount: u128) {
+        // 1. get all subscrtions of current subscriber
+        // 2. calculate total cost.
+        // 3. return the valid amount
+
         todo!()
     }
 }
