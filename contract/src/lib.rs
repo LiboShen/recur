@@ -110,8 +110,8 @@ impl Contract {
         let mut balance = self
             .deposit_by_account
             .get(&account)
-            .expect("No such account {}");
-            
+            .expect(format!("No such account {}", account.to_string()));
+
         return &balance;
     }
 
