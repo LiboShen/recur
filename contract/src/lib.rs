@@ -110,15 +110,18 @@ impl Contract {
         let mut balance = self
             .deposit_by_account
             .get(&account)
-            .expect(format!("No such account {}", account.to_string()));
+            .expect(format!("No such account {}!", account.to_string()));
 
         return &balance;
     }
 
     fn calcuate_subscription_cost(&mut self, subscription_id: SubscriptionID) -> u128 {
-        let subscription = self.subscription_by_id.get(&subscription_id).unwrap();
+        let subscription = self
+            .subscription_by_id
+            .get(&subscription_id)
+            .expect("No such subscription!");
 
-        let cost: u128 = 0;
+        let mut cost: u128 = 0;
         let plan = self
             .subscription_plan_by_id
             .get(&subscription.plan_id)
@@ -128,7 +131,7 @@ impl Contract {
         let count_cycle = 1 + duration / &plan.payment_cycle_length;
 
         cost = (count_cycle as u128) * &plan.payment_cycle_rate;
-        return cost;
+        return &cost;
     }
 }
 
