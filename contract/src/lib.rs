@@ -287,8 +287,8 @@ impl SubscriberActions for Contract {
 
         // create the subscription
         let a_subscription = Subscription {
-            subscriber_id: subscriber,
-            plan_id: plan_id,
+            subscriber_id: subscriber.clone(),
+            plan_id: plan_id.clone(),
             state: SubscriptionState::Active,
             start_ts: env::block_timestamp(),
         };
