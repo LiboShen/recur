@@ -7,7 +7,9 @@ use near_sdk::bs58;
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
 use near_sdk::serde::ser::SerializeTuple;
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, CryptoHash, PanicOnDefault};
+use near_sdk::{
+    env, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault, Promise,
+};
 
 type SubscriptionPlanID = String; // ID for each subscrtion plan
 type SubscriptionID = String;
@@ -116,8 +118,8 @@ impl Contract {
     }
 
     // check the depostive amount of a given account
-    pub fn get_deposit(&mut self, account: AccountId) -> u128 {
-        let mut balance = self
+    pub fn get_deposit(&mut self, account: &AccountId) -> u128 {
+        let balance = self
             .deposit_by_account
             .get(&account)
             .expect("No such account!");
@@ -172,6 +174,13 @@ impl Contract {
 
         return total_cost;
     }
+
+    // hellper function tranfer FT to account
+    // TODO: support Multi FT
+    fn transfer(&self, to: AccountId, amount: Balance) {
+        // helper function to perform FT transfer
+        Promise::new(to).transfer(amount);
+    }
 }
 
 // functions related to to service provider
@@ -199,7 +208,7 @@ pub trait SubscriberActions {
     // TODO: support multi FTs
     fn deposit(&mut self, subscriber_id: AccountId, amount: u128);
 
-    fn withdraw(&mut self, amount: u128);
+    fn withdraw(&mut self, amount: Option<u128>);
 }
 
 #[near_bindgen]
@@ -227,8 +236,8 @@ impl ProviderActions for Contract {
         assert!(payment_cycle_rate > 0, "Rate needs to be a postive number!");
 
         assert!(
-            payment_cycle_count >= 0,
-            "Payment count needs to be non-negative! "
+            payment_cycle_count > 0,
+            "Payment count needs to be positive! "
         );
 
         // create plan ID
@@ -362,16 +371,35 @@ impl SubscriberActions for Contract {
         self.deposit_by_account.insert(&subscriber_id, &balance);
     }
 
-    // function to withraw unlocked deposit
-    fn withdraw(&mut self, amount: u128) {
+    // function to withdraw unlocked deposit
+    #[payable]
+    fn withdraw(&mut self, amount: Option<u128>) {
         // 1. get total cost from all subscrtions
-        // 2. find withdrawable amount = deposit - total_cost
-        // if amount < withdrawable_amount: 
-        //          transfer the money
+        // 2. find available_fund = deposit - total_cost
+        // 3. when not input amount is given, set asking_amount to available_fund
+        // if asking_amount < available_fund:
+        //          transfer token
         //          update the deposit table
         // else: panic
+        let user_id = env::predecessor_account_id();
 
-        todo!()
+        // find withdrawable amount
+        let deposit = self.get_deposit(&user_id);
+        let total_cost = self.calculate_total_cost_of_subscriber(&user_id);
+        assert!(
+            deposit >= total_cost,
+            "No available fund! Account: {}",
+            &user_id
+        );
+
+        let available_fund = deposit - total_cost;
+
+        // if no input amount is given, withdarw all available fund
+        let asking_amount = amount.unwrap_or(available_fund);
+        assert!(available_fund >= asking_amount, "Not enough fund!");
+
+        // transfer token
+        self.transfer(user_id, asking_amount);
     }
 }
 
