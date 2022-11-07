@@ -52,13 +52,6 @@ pub struct Subscription {
     start_ts: u64,            // start of this subscrtion
 }
 
-#[derive(BorshDeserialize, BorshSerialize, Serialize)]
-#[serde(crate = "near_sdk::serde")]
-pub struct Fund {
-    deposit: u128,       // total deposit
-    locked_amount: u128, // payment occured but haven't being taken
-}
-
 //Subscription Service Contract
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
