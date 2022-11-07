@@ -81,8 +81,12 @@ impl Contract {
         this
     }
 
-    pub fn get_plan(&mut self, plan_id: SubscriptionPlanID) -> Option<SubscriptionPlan> {
-        self.subscription_plan_by_id.get(&plan_id)
+    pub fn get_plan(&mut self, plan_id: SubscriptionPlanID) -> SubscriptionPlan {
+        let plan = self
+            .subscription_plan_by_id
+            .get(&plan_id)
+            .expect("No such plan!");
+        return plan;
     }
 
     // get all subscriptions of a given plan
@@ -147,7 +151,7 @@ pub trait ProviderActions {
     ) -> SubscriptionPlanID;
 
     // collect fees from a chosen plan.
-    // return a list of tuple indicating the subscrtion and if the charge succeeds
+    // return a list of tuple representing the subscription and if the charge succeeds
     fn collect_fees(&mut self, plan_id: SubscriptionPlanID) -> Vec<(Subscription, bool)>;
 }
 
@@ -204,9 +208,9 @@ impl ProviderActions for Contract {
         // initiate the struct and return
         let a_plan = SubscriptionPlan {
             provider_id: &a_provider_id,
-            payment_cycle_length: payment_cycle_length,
-            payment_cycle_rate: payment_cycle_rate,
-            payment_cycle_count: payment_cycle_count,
+            payment_cycle_length: &payment_cycle_length,
+            payment_cycle_rate: &payment_cycle_rate,
+            payment_cycle_count: &payment_cycle_count,
             plan_name: plan_name,
             prev_charge_ts: 0,
         };
@@ -236,10 +240,29 @@ impl ProviderActions for Contract {
 #[near_bindgen]
 impl SubscriberActions for Contract {
     fn create_subscription(&mut self, plan_id: SubscriptionPlanID) -> SubscriptionID {
+        // get the plan
+        let plan = self
+            .subscription_plan_by_id
+            .get(&plan_id)
+            .expect("No such plan!");
+
+        // validate deposit : deposit should cover at least the 1st payment
+        let balance = self
+            .deposit_by_account
+            .get(&subscriber)
+            .expect("Deposit first before creating subscrptions!");
+        assert!(
+            balance >= &plan.payment_cycle_rate,
+            format!(
+                "Deposit is not enough for first payment {}",
+                &plan.payment_cycle_rate
+            )
+        );
+
         // subscription can only be created by own account
         let subscriber: AccountId = env::predecessor_account_id();
 
-        // create id for map
+        // generate an id
         let curr_ts_string = env::block_timestamp().to_string();
         let mut seed = subscriber.as_str().to_owned();
         seed.push_str(&curr_ts_string);
@@ -248,9 +271,19 @@ impl SubscriberActions for Contract {
             .with_alphabet(bs58::Alphabet::BITCOIN)
             .into_string();
 
-        // validate fund : fund should cover at lease 1st payment
+        // create the subscription
+        let a_subscription = Subscription {
+            subscriber_id: subscriber,
+            plan_id: &plan_id,
+            state: SubscriptionState::Active,
+            start_ts: env::block_timestamp(),
+        };
 
-        todo!()
+        //record the new subscription
+        self.subscription_by_id
+            .insert(&subscription_id, &a_subscription);
+
+        return subscription_id;
     }
 
     fn cancel_subscription(&mut self, subscription_id: SubscriptionID) {
