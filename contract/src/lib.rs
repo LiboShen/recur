@@ -99,19 +99,36 @@ impl Contract {
     ) -> Vec<(SubscriptionID, Subscription)> {
         let mut results: Vec<(SubscriptionID, Subscription)> = vec![];
 
-        let ids = self.subscrtion_ids_by_plan_id.get(&plan_id);
-        if ids.is_some() {
-            for id in ids.iter() {
-                let sub = self.subscription_by_id.get(id).unwrap();
-                results.push(id, sub);
-            }
+        let ids = self.subscrtion_ids_by_plan_id.get(&plan_id).unwrap();
+        for id in ids.iter(){
+            let sub = self.subscription_by_id.get(&id).unwrap();
+            results.push(id, sub);
         }
         return results;
     }
 
     // check if a subscriber has enough funds
     pub fn validate_subscription(&mut self, subscription_id: SubscriptionID) {
+
         todo!()
+    }
+
+    // check the fund amount of a given account
+    pub fn get_fund(&mut self, account:AccountId) -> u128{
+        todo!()
+    }
+
+    fn calcuate_subscription_cost(&mut self, subscription_id:SubscriptionID) -> u128{
+        let subscription = self.subscription_by_id.get(&subscription_id).unwrap();
+        
+        let cost:u128 = 0;
+        let plan = self.subscription_plan_by_id.get(&subscription.plan_id).unwrap();
+        let curr_ts = env::block_timestamp();
+        let duration = (curr_ts - subscription.start_ts);
+        let count_cycle = 1 + duration / &plan.payment_cycle_length;
+        
+        cost = (count_cycle as u128) * &plan.payment_cycle_rate;
+        return cost;
     }
 }
 
@@ -123,7 +140,7 @@ pub trait ProviderActions {
         payment_cycle_length: u64,
         payment_cycle_rate: u128,
         payment_cycle_count: u64,
-        metadata: Option<String>,
+        plan_name: Option<String>,
     ) -> SubscriptionPlanID;
 
     // collect fees from a chosen plan.
@@ -143,7 +160,7 @@ pub trait SubscriberActions {
     fn withdraw(&mut self, amount: u128);
 }
 
-#[cfg(all(test, not(target_arch = "wasm32")))]
+#[near_bindgen]
 impl ProviderActions for Contract {
     fn create_subscription_plan(
         &mut self,
@@ -151,7 +168,7 @@ impl ProviderActions for Contract {
         payment_cycle_length: u64,
         payment_cycle_rate: u128,
         payment_cycle_count: u64,
-        metadata: Option<String>,
+        plan_name: Option<String>,
     ) -> SubscriptionPlanID {
         // if no provider is given, using the sender's account id
         let a_provider_id: AccountId = if let None = provider_id {
@@ -187,7 +204,7 @@ impl ProviderActions for Contract {
             payment_cycle_length: payment_cycle_length,
             payment_cycle_rate: payment_cycle_rate,
             payment_cycle_count: payment_cycle_count,
-            plan_name: metadata,
+            plan_name: plan_name,
             prev_charge_ts: 0,
         };
 
@@ -213,6 +230,42 @@ impl ProviderActions for Contract {
     }
 }
 
+#[near_bindgen]
+impl SubscriberActions for Contract{
+    fn create_subscription(&mut self, plan_id: SubscriptionPlanID) -> SubscriptionID{
+        // subscription can only be created by own account
+        let subscriber: AccountId = env::predecessor_account_id();
+
+        // create id for map
+        let curr_ts_string = env::block_timestamp().to_string();
+        let mut seed = subscriber.as_str().to_owned();
+        seed.push_str(&curr_ts_string);
+
+        let subscription_id:SubscriptionID = bs58::encode(seed.into_bytes())
+            .with_alphabet(bs58::Alphabet::BITCOIN)
+            .into_string();
+
+        // validate fund : fund should cover 1st payment
+
+        todo!()
+    }
+
+    fn cancel_subscription(&mut self, subscription_id: SubscriptionID){
+
+        todo!()
+    }
+
+    fn deposit(&mut self, subscriber_id: AccountId, amount: u128){
+        todo!()
+    }
+
+    fn withdraw(&mut self, amount: u128){
+        todo!()
+    }
+    
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use near_sdk::test_utils::{accounts, VMContextBuilder};
     use near_sdk::testing_env;
