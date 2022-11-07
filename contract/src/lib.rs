@@ -126,7 +126,7 @@ impl Contract {
     }
 
     // function to calculate the cost of one subscription
-    fn calcuate_subscription_cost(&mut self, subscription_id: SubscriptionID) -> u128 {
+    fn calcuate_subscription_cost(&mut self, subscription_id: &SubscriptionID) -> u128 {
         let subscription = self
             .subscription_by_id
             .get(&subscription_id)
@@ -146,10 +146,31 @@ impl Contract {
     }
 
     // function to calcuate all subscrtions cost from a subscriber
-    fn calculate_total_cost_of_a_subscriber(&mut self, subscriber_id: AccountId) -> u128 {
+    // This function will be used when calculating withdraw amount of a subscriber
+    fn calculate_total_cost_of_subscriber(&mut self, subscriber_id: &AccountId) -> u128 {
         //1. get all subscritons of one user
         //2. accumulate cost from all active subscriptions
-        todo!()
+
+        let mut total_cost: u128 = 0;
+        let subscription_ids = self
+            .subscriptions_per_subscriber
+            .get(&subscriber_id)
+            .expect("No subscriptions to charge!");
+
+        for sub_id in subscription_ids.iter() {
+            let sub = self
+                .subscription_by_id
+                .get(&sub_id)
+                .expect("Invalid subscrtion!");
+            // skip cancled subscrtion
+            if let SubscriptionState::Canceled = sub.state {
+                continue;
+            }
+
+            total_cost += self.calcuate_subscription_cost(&sub_id);
+        }
+
+        return total_cost;
     }
 }
 
@@ -191,7 +212,6 @@ impl ProviderActions for Contract {
         payment_cycle_count: u64,
         plan_name: Option<String>,
     ) -> SubscriptionPlanID {
-
         // if no provider is given, using the sender's account id
         let a_provider_id = provider_id
             // convert the valid provider ID into an account ID
