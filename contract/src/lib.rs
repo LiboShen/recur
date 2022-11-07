@@ -105,9 +105,14 @@ impl Contract {
         todo!()
     }
 
-    // check the fund amount of a given account
+    // check the depostive amount of a given account
     pub fn get_deposit(&mut self, account: AccountId) -> u128 {
-        todo!()
+        let mut balance = self
+            .deposit_by_account
+            .get(&account)
+            .expect("No such account {}");
+            
+        return &balance;
     }
 
     fn calcuate_subscription_cost(&mut self, subscription_id: SubscriptionID) -> u128 {
