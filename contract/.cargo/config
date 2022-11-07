@@ -1,3 +1,6 @@
+// config to fix issues on mac OS 
+// https://stackoverflow.com/questions/28124221/error-linking-with-cc-failed-exit-code-1 
+
 [target.x86_64-apple-darwin]
 rustflags = [
   "-C", "link-arg=-undefined",
