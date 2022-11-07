@@ -67,8 +67,8 @@ pub struct Contract {
     subscription_plan_by_id: UnorderedMap<SubscriptionPlanID, SubscriptionPlan>,
     subscription_by_id: UnorderedMap<SubscriptionID, Subscription>,
     subscrtion_ids_by_plan_id: LookupMap<SubscriptionPlanID, UnorderedSet<SubscriptionID>>, // helper structure for viewing
-    fund_per_account: UnorderedMap<AccountId, Fund>, // subscriber and her fund (deposit, locked_amount)
-    //TODO: deposit_map_multi_token: UnorderedMap<AccountId, UnorderedMap<AccountId, u128>>
+    deposit_by_account: UnorderedMap<AccountId, u128>, // subscriber and her deposit
+                                                       //TODO: deposit_map_multi_token: UnorderedMap<AccountId, UnorderedMap<AccountId, u128>>
 }
 
 #[near_bindgen]
@@ -83,7 +83,7 @@ impl Contract {
             subscrtion_ids_by_plan_id: LookupMap::new(
                 StorageKey::SubscrtionIDs.try_to_vec().unwrap(),
             ),
-            fund_per_account: UnorderedMap::new(StorageKey::Deposit),
+            deposit_by_account: UnorderedMap::new(StorageKey::Deposit),
         };
         this
     }
@@ -100,7 +100,7 @@ impl Contract {
         let mut results: Vec<(SubscriptionID, Subscription)> = vec![];
 
         let ids = self.subscrtion_ids_by_plan_id.get(&plan_id).unwrap();
-        for id in ids.iter(){
+        for id in ids.iter() {
             let sub = self.subscription_by_id.get(&id).unwrap();
             results.push(id, sub);
         }
@@ -109,24 +109,26 @@ impl Contract {
 
     // check if a subscriber has enough funds
     pub fn validate_subscription(&mut self, subscription_id: SubscriptionID) {
-
         todo!()
     }
 
     // check the fund amount of a given account
-    pub fn get_fund(&mut self, account:AccountId) -> u128{
+    pub fn get_deposit(&mut self, account: AccountId) -> u128 {
         todo!()
     }
 
-    fn calcuate_subscription_cost(&mut self, subscription_id:SubscriptionID) -> u128{
+    fn calcuate_subscription_cost(&mut self, subscription_id: SubscriptionID) -> u128 {
         let subscription = self.subscription_by_id.get(&subscription_id).unwrap();
-        
-        let cost:u128 = 0;
-        let plan = self.subscription_plan_by_id.get(&subscription.plan_id).unwrap();
+
+        let cost: u128 = 0;
+        let plan = self
+            .subscription_plan_by_id
+            .get(&subscription.plan_id)
+            .unwrap();
         let curr_ts = env::block_timestamp();
         let duration = (curr_ts - subscription.start_ts);
         let count_cycle = 1 + duration / &plan.payment_cycle_length;
-        
+
         cost = (count_cycle as u128) * &plan.payment_cycle_rate;
         return cost;
     }
@@ -171,11 +173,11 @@ impl ProviderActions for Contract {
         plan_name: Option<String>,
     ) -> SubscriptionPlanID {
         // if no provider is given, using the sender's account id
-        let a_provider_id: AccountId = if let None = provider_id {
-            env::predecessor_account_id()
-        } else {
-            provider_id.unwrap()
-        };
+        let a_provider_id = provider_id
+            // convert the valid provider ID into an account ID
+            .map(|a| a.into())
+            // if no provider id is given, simply use the caller's ID
+            .unwrap_or_else(env::predecessor_account_id());
 
         assert!(
             payment_cycle_length >= 60,
@@ -200,7 +202,7 @@ impl ProviderActions for Contract {
 
         // initiate the struct and return
         let a_plan = SubscriptionPlan {
-            provider_id: a_provider_id,
+            provider_id: &a_provider_id,
             payment_cycle_length: payment_cycle_length,
             payment_cycle_rate: payment_cycle_rate,
             payment_cycle_count: payment_cycle_count,
@@ -231,8 +233,8 @@ impl ProviderActions for Contract {
 }
 
 #[near_bindgen]
-impl SubscriberActions for Contract{
-    fn create_subscription(&mut self, plan_id: SubscriptionPlanID) -> SubscriptionID{
+impl SubscriberActions for Contract {
+    fn create_subscription(&mut self, plan_id: SubscriptionPlanID) -> SubscriptionID {
         // subscription can only be created by own account
         let subscriber: AccountId = env::predecessor_account_id();
 
@@ -241,28 +243,32 @@ impl SubscriberActions for Contract{
         let mut seed = subscriber.as_str().to_owned();
         seed.push_str(&curr_ts_string);
 
-        let subscription_id:SubscriptionID = bs58::encode(seed.into_bytes())
+        let subscription_id: SubscriptionID = bs58::encode(seed.into_bytes())
             .with_alphabet(bs58::Alphabet::BITCOIN)
             .into_string();
 
-        // validate fund : fund should cover 1st payment
+        // validate fund : fund should cover at lease 1st payment
 
         todo!()
     }
 
-    fn cancel_subscription(&mut self, subscription_id: SubscriptionID){
-
+    fn cancel_subscription(&mut self, subscription_id: SubscriptionID) {
         todo!()
     }
 
-    fn deposit(&mut self, subscriber_id: AccountId, amount: u128){
-        todo!()
+    // function to top up deposit
+    fn deposit(&mut self, subscriber_id: AccountId, amount: u128) {
+        assert!(amount > 0, "Deposit must be positive!");
+
+        // get balance of the account, if the account is not in the map, default the balance to 0
+        let mut balance: u128 = self.deposit_by_account.get(&subscriber_id).unwrap_or(0);
+        balance += deposit;
+        self.deposit_by_account.insert(&subscriber_id, &balance);
     }
 
-    fn withdraw(&mut self, amount: u128){
+    fn withdraw(&mut self, amount: u128) {
         todo!()
     }
-    
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
