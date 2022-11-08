@@ -312,6 +312,7 @@ impl ProviderActions for Contract {
     }
 
     // TODO: support multi FTs
+    #[payable]
     fn collect_fees(
         &mut self,
         plan_id: SubscriptionPlanID,
@@ -378,6 +379,8 @@ impl ProviderActions for Contract {
         // update plan details & insert back to index
         plan.prev_charge_ts = charge_ts;
         self.subscription_plan_by_id.insert(&plan_id, &plan);
+
+        self.transfer(plan.provider_id, total_fees);
 
         return result;
     }
