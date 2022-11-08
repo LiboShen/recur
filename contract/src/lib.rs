@@ -302,8 +302,8 @@ impl ProviderActions for Contract {
 
     fn stop_subscription(&mut self, subscription_id: &SubscriptionID) {
         // only the service provider can stop the service
-        // stop by updating subscrtion state
-        // insert the subscrtion back
+        // stop by updating subscription state
+        // insert the subscription back
 
         let mut subscription = self
             .subscription_by_id
