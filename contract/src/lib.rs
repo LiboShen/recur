@@ -285,12 +285,12 @@ impl ProviderActions for Contract {
 
     // TODO: support multi FTs
     fn collect_fees(&mut self, plan_id: SubscriptionPlanID) -> Vec<(Subscription, bool)> {
-        /* collect fees from all valid subscrtion of a given plan:
+        /* collect fees from all valid subscrtions of a given plan:
         For each subscrtion of a plan:
             1. check if the subscription is active
             2. check if payments number exceeds count
             3. calcuate the payment and check if the deposit is enough
-            4. record the valid amount and the correct charge state
+            4. record the valid amount and the update charge state
 
         transfer the total amount to provider
 
@@ -406,7 +406,13 @@ impl SubscriberActions for Contract {
 
     // function to top up deposit
     fn deposit(&mut self, subscriber_id: AccountId, amount: u128) {
+        // 1. transfer fund to current contract
+        // 2. update the deposit table
+        // one should be able to deposit to other's ccount too
+
         assert!(amount > 0, "Deposit must be positive!");
+
+        self.transfer(env::current_account_id(), amount);
 
         // get balance of the account, if the account is not in the map, default the balance to 0
         let mut balance: u128 = self.deposit_by_account.get(&subscriber_id).unwrap_or(0);
