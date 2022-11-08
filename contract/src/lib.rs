@@ -42,8 +42,8 @@ pub struct SubscriptionPlan {
     payment_cycle_count: u64,  // total number of paymens. 0 represents indefinte plan
     // allow_grace_period: u64,    // TODO: grace period in seconds
     plan_name: Option<String>, // name of the plan
-    prev_charge_ts: u64, // most recent charge of the plan - used for calculating payment amount
-                         // set to 0 at initialisation
+    prev_charge_ts: Option<u64>, // most recent charge of the plan - used for calculating payment amount
+                                 // set to 0 at initialisation
 }
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
@@ -151,16 +151,28 @@ impl Contract {
             .get(&subscription_id)
             .expect("No such subscription!");
 
+        // get the plan details
         let mut cost: u128 = 0;
         let plan = self
             .subscription_plan_by_id
             .get(&subscription.plan_id)
             .unwrap();
-        let curr_ts = env::block_timestamp();
-        let duration = curr_ts - subscription.start_ts;
-        let count_cycle = 1 + duration / &plan.payment_cycle_length;
 
+        // decide the charge period duration 
+        let curr_ts = env::block_timestamp();
+        let prev_charge_ts = plan.prev_charge_ts.unwrap_or(0);
+
+        let mut charge_start_ts = subscription.start_ts;
+        if prev_charge_ts > subscription.start_ts {
+            // if the plan has been charged previously, calcualte using updated time
+            charge_start_ts = prev_charge_ts;
+        }
+        let duration = curr_ts - charge_start_ts;
+
+        // calcuate cost. Subscriber will always be charged upfront for 1 cycle. 
+        let count_cycle = 1 + duration / &plan.payment_cycle_length;
         cost = (count_cycle as u128) * &plan.payment_cycle_rate;
+
         return cost;
     }
 
@@ -209,6 +221,7 @@ pub trait ProviderActions {
         payment_cycle_rate: u128,
         payment_cycle_count: u64,
         plan_name: Option<String>,
+        prev_charge_ts: Option<u64>,
     ) -> SubscriptionPlanID;
 
     // collect fees from a chosen plan.
@@ -288,9 +301,12 @@ impl ProviderActions for Contract {
         /* collect fees from all valid subscrtions of a given plan:
         For each subscrtion of a plan:
             1. check if the subscription is active
-            2. check if payments number exceeds count
-            3. calcuate the payment and check if the deposit is enough
-            4. record the valid amount and the update charge state
+            2. calculate the correct payment
+            3. accumulate total fees
+            4. record charge result
+
+        transfer the total fees to provider
+        update plan prev_charge_ts
 
         transfer the total amount to provider
 
