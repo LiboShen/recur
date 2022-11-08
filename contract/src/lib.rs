@@ -113,8 +113,25 @@ impl Contract {
     }
 
     // check if a subscriber has enough funds
-    pub fn validate_subscription(&mut self, subscription_id: SubscriptionID) {
-        todo!()
+    // this can be used by providers to decide if service should be suspended
+    pub fn validate_subscription(&mut self, subscription_id: &SubscriptionID) -> bool {
+        //check deposit
+        //check currrent cost
+        //compare
+
+        let subscription = self
+            .subscription_by_id
+            .get(subscription_id)
+            .expect("No such subscrtion!");
+
+        let deposit = self.get_deposit(&subscription.subscriber_id);
+        let cost = self.calcuate_subscription_cost(subscription_id);
+
+        if deposit >= cost {
+            return true;
+        } else {
+            return false;
+        }
     }
 
     // check the depostive amount of a given account
@@ -175,7 +192,7 @@ impl Contract {
         return total_cost;
     }
 
-    // hellper function tranfer FT to account
+    // hellper function: tranfer FT to account
     // TODO: support Multi FT
     fn transfer(&self, to: AccountId, amount: Balance) {
         // helper function to perform FT transfer
