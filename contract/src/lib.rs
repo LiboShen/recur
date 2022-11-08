@@ -222,8 +222,6 @@ pub trait ProviderActions {
 pub trait SubscriberActions {
     fn create_subscription(&mut self, plan_id: SubscriptionPlanID) -> SubscriptionID;
 
-    fn cancel_subscription(&mut self, subscription_id: SubscriptionID);
-
     // function to deposit fund
     // TODO: support multi FTs
     fn deposit(&mut self, subscriber_id: AccountId, amount: u128);
@@ -404,10 +402,6 @@ impl SubscriberActions for Contract {
             .insert(&subscriber, &subscriptions_ids_set_2);
 
         return subscription_id;
-    }
-
-    fn cancel_subscription(&mut self, subscription_id: SubscriptionID) {
-        todo!()
     }
 
     // function to top up deposit
