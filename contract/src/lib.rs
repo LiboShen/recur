@@ -125,7 +125,7 @@ impl Contract {
             .expect("No such subscription!");
 
         let deposit = self.get_deposit(&subscription.subscriber_id);
-        let cost = self.calcuate_subscription_cost(subscription_id);
+        let cost = self.calcuate_subscription_cost(subscription_id, None);
 
         if deposit >= cost {
             return true;
@@ -145,7 +145,9 @@ impl Contract {
     }
 
     // function to calculate the cost of one subscription
-    fn calcuate_subscription_cost(&mut self, subscription_id: &SubscriptionID) -> u128 {
+    fn calcuate_subscription_cost(&mut self, subscription_id: &SubscriptionID, end_ts:Option<u64>) -> u128 {
+        // end_ts represents the charge period stop ts. if not given, default to current ts
+
         let subscription = self
             .subscription_by_id
             .get(&subscription_id)
@@ -159,7 +161,7 @@ impl Contract {
             .unwrap();
 
         // decide the charge period duration 
-        let curr_ts = env::block_timestamp();
+        let charge_end_ts = end_ts.unwrap_or_else(env::block_timestamp); // if end_ts is not given, using the current ts
         let prev_charge_ts = plan.prev_charge_ts.unwrap_or(0);
 
         let mut charge_start_ts = subscription.start_ts;
@@ -167,7 +169,7 @@ impl Contract {
             // if the plan has been charged previously, calcualte using updated time
             charge_start_ts = prev_charge_ts;
         }
-        let duration = curr_ts - charge_start_ts;
+        let duration = charge_end_ts - charge_start_ts;
 
         // calcuate cost. Subscriber will always be charged upfront for 1 cycle. 
         let count_cycle = 1 + duration / &plan.payment_cycle_length;
@@ -198,7 +200,7 @@ impl Contract {
                 continue;
             }
 
-            total_cost += self.calcuate_subscription_cost(&sub_id);
+            total_cost += self.calcuate_subscription_cost(&sub_id, None);
         }
 
         return total_cost;
@@ -226,7 +228,7 @@ pub trait ProviderActions {
 
     // collect fees from a chosen plan.
     // return a list of tuple representing the subscription and if the charge succeeds
-    fn collect_fees(&mut self, plan_id: SubscriptionPlanID) -> Vec<(Subscription, bool)>;
+    fn collect_fees(&mut self, plan_id: SubscriptionPlanID) -> Vec<(SubscriptionID, bool)>;
 
     // A provider can choose to stop a service e.g. when a subscription is overdue.
     fn stop_subscription(&mut self, subscription_id: &SubscriptionID);
@@ -251,6 +253,7 @@ impl ProviderActions for Contract {
         payment_cycle_rate: u128,
         payment_cycle_count: u64,
         plan_name: Option<String>,
+        prev_charge_ts:Option<u64>,
     ) -> SubscriptionPlanID {
         // if no provider is given, using the sender's account id
         let a_provider_id = provider_id
@@ -287,7 +290,7 @@ impl ProviderActions for Contract {
             payment_cycle_rate: payment_cycle_rate,
             payment_cycle_count: payment_cycle_count,
             plan_name: plan_name,
-            prev_charge_ts: 0,
+            prev_charge_ts: prev_charge_ts,
         };
 
         // insert the plan into map
@@ -297,20 +300,39 @@ impl ProviderActions for Contract {
     }
 
     // TODO: support multi FTs
-    fn collect_fees(&mut self, plan_id: SubscriptionPlanID) -> Vec<(Subscription, bool)> {
+    fn collect_fees(&mut self, plan_id: SubscriptionPlanID) -> Vec<(SubscriptionID, bool)> {
         /* collect fees from all valid subscrtions of a given plan:
         For each subscrtion of a plan:
             1. check if the subscription is active
             2. calculate the correct payment
+            3. validate if deposit is enough
             3. accumulate total fees
             4. record charge result
 
         transfer the total fees to provider
         update plan prev_charge_ts
 
-        transfer the total amount to provider
+        transfer the total fees to provider 
+        */
 
-         */
+        let subscription_ids = self
+        .subscription_ids_by_plan_id
+        .get(&plan_id)
+        .expect("No existing subscrtions!");
+        
+        let mut total_fees: u128 = 0;
+        let mut result:Vec<(SubscriptionID, bool)> = vec![];
+
+        for sub_id in subscription_ids.iter(){
+            let subscription = self.subscription_by_id.get(&sub_id).unwrap(); 
+            // if subscription is not active, skip
+            if subscription.state == SubscriptionState::Canceled{
+                continue;
+            }
+            let fee = self.calcuate_subscription_cost(&sub_id, None);
+
+        }
+        
         todo!()
     }
 
@@ -421,6 +443,7 @@ impl SubscriberActions for Contract {
     }
 
     // function to top up deposit
+    #[payable]
     fn deposit(&mut self, subscriber_id: AccountId, amount: u128) {
         // 1. transfer fund to current contract
         // 2. update the deposit table
