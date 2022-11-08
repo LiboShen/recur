@@ -122,7 +122,7 @@ impl Contract {
         let subscription = self
             .subscription_by_id
             .get(subscription_id)
-            .expect("No such subscrtion!");
+            .expect("No such subscription!");
 
         let deposit = self.get_deposit(&subscription.subscriber_id);
         let cost = self.calcuate_subscription_cost(subscription_id);
@@ -214,6 +214,9 @@ pub trait ProviderActions {
     // collect fees from a chosen plan.
     // return a list of tuple representing the subscription and if the charge succeeds
     fn collect_fees(&mut self, plan_id: SubscriptionPlanID) -> Vec<(Subscription, bool)>;
+
+    // A provider can choose to stop a service e.g. when a subscription is overdue.
+    fn stop_subscription(&mut self, subscription_id: &SubscriptionID);
 }
 
 pub trait SubscriberActions {
@@ -295,6 +298,35 @@ impl ProviderActions for Contract {
 
          */
         todo!()
+    }
+
+    fn stop_subscription(&mut self, subscription_id: &SubscriptionID) {
+        // only the service provider can stop the service
+        // stop by updating subscrtion state
+        // insert the subscrtion back
+
+        let mut subscription = self
+            .subscription_by_id
+            .get(subscription_id)
+            .expect("No such subscription!");
+
+        // A plan must exist if a subscrtion exists
+        let plan = self
+            .subscription_plan_by_id
+            .get(&subscription.plan_id)
+            .unwrap();
+
+        assert!(
+            plan.provider_id == env::predecessor_account_id(),
+            "Only the service provider can cancel the subscrtion!"
+        );
+
+        // update state
+        subscription.state = SubscriptionState::Canceled;
+
+        // insert back to the index
+        self.subscription_by_id
+            .insert(subscription_id, &subscription);
     }
 }
 
