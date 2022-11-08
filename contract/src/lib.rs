@@ -1,12 +1,11 @@
 // TODO: Beneficier
 // TODO: NFT contract
 
-use near_contract_standards::non_fungible_token::{hash_account_id, TokenId};
+use near_contract_standards::non_fungible_token::{hash_account_id};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::bs58;
-use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
-use near_sdk::serde::ser::SerializeTuple;
-use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
+use near_sdk::serde::{Serialize};
 use near_sdk::{
     env, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault, Promise,
 };
@@ -162,7 +161,6 @@ impl Contract {
             .expect("No such subscription!");
 
         // get the plan details
-        let mut cost: u128 = 0;
         let plan = self
             .subscription_plan_by_id
             .get(&subscription.plan_id)
@@ -181,7 +179,7 @@ impl Contract {
 
         // calcuate cost. Subscriber will always be charged upfront for 1 cycle.
         let count_cycle = 1 + duration / &plan.payment_cycle_length;
-        cost = (count_cycle as u128) * &plan.payment_cycle_rate;
+        let cost = (count_cycle as u128) * &plan.payment_cycle_rate;
 
         return cost;
     }
