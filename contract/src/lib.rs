@@ -254,7 +254,7 @@ pub trait SubscriberActions {
 
     // function to deposit fund
     // TODO: support multi FTs
-    fn deposit(&mut self, subscriber_id: AccountId, amount: u128);
+    fn deposit(&mut self, subscriber_id: AccountId);
 
     fn withdraw(&mut self, amount: Option<u128>);
 }
@@ -504,14 +504,13 @@ impl SubscriberActions for Contract {
 
     // function to top up deposit
     #[payable]
-    fn deposit(&mut self, subscriber_id: AccountId, amount: u128) {
+    fn deposit(&mut self, subscriber_id: AccountId) {
         // 1. transfer fund to current contract
         // 2. update the deposit table
         // one should be able to deposit to other's ccount too
 
+        let amount = env::attached_deposit();
         assert!(amount > 0, "Deposit must be positive!");
-
-        self.transfer(env::current_account_id(), amount);
 
         // get balance of the account, if the account is not in the map, default the balance to 0
         let mut balance: u128 = self.deposit_by_account.get(&subscriber_id).unwrap_or(0);
