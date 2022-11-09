@@ -10,6 +10,8 @@ use near_sdk::{
     env, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault, Promise,
 };
 
+use std::cmp::max;
+
 type SubscriptionPlanID = String; // ID for each subscrtion plan
 type SubscriptionID = String;
 
@@ -171,11 +173,11 @@ impl Contract {
             "Charge end time can't be in the furture"
         );
 
-        let mut charge_start_ts = subscription.start_ts;
-        if prev_charge_ts > subscription.start_ts {
-            // if the plan has been charged previously, calcualte using updated time
-            charge_start_ts = prev_charge_ts;
-        }
+
+        // if the plan has been charged previously, calcualte using updated time
+        // treat start_ts as one cycle earlier to achive upfront payment
+        let charge_start_ts = max(prev_charge_ts, subscription.start_ts - &plan.payment_cycle_length);
+        
         let duration = charge_end_ts - charge_start_ts;
 
         // calcuate cost. Subscriber will always be charged upfront for 1 cycle.
