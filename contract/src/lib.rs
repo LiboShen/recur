@@ -1,11 +1,11 @@
 // TODO: Beneficier
 // TODO: NFT contract
 
-use near_contract_standards::non_fungible_token::{hash_account_id};
+use near_contract_standards::non_fungible_token::hash_account_id;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::bs58;
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
-use near_sdk::serde::{Serialize};
+use near_sdk::serde::Serialize;
 use near_sdk::{
     env, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault, Promise,
 };
@@ -170,6 +170,11 @@ impl Contract {
         let charge_end_ts = end_ts.unwrap_or_else(env::block_timestamp); // if end_ts is not given, using the current ts
         let prev_charge_ts = plan.prev_charge_ts.unwrap_or(0);
 
+        assert!(
+            charge_end_ts <= env::block_timestamp(),
+            "Charge end time can't be in the furture"
+        );
+
         let mut charge_start_ts = subscription.start_ts;
         if prev_charge_ts > subscription.start_ts {
             // if the plan has been charged previously, calcualte using updated time
@@ -330,8 +335,13 @@ impl ProviderActions for Contract {
         transfer the total fees to provider
         */
 
-        let charge_ts = charge_ts.unwrap_or_else(env::block_timestamp);
-        assert!(charge_ts <= env::block_timestamp(),"You can't charge for future time!");
+        // let charge_ts = charge_ts.unwrap_or_else(env::block_timestamp);
+        if charge_ts.is_some() {
+            assert!(
+                charge_ts.unwrap() <= env::block_timestamp(),
+                "You can't charge for future time!"
+            );
+        }
 
         let mut plan = self
             .subscription_plan_by_id
