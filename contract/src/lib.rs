@@ -266,7 +266,7 @@ impl ProviderActions for Contract {
         prev_charge_ts: Option<u64>,
     ) -> SubscriptionPlanID {
         // if no provider is given, using the sender's account id
-        let a_provider_id = provider_id
+        let provider_id = provider_id
             // convert the valid provider ID into an account ID
             .map(|a| a.into())
             // if no provider id is given, simply use the caller's ID
@@ -286,7 +286,7 @@ impl ProviderActions for Contract {
 
         // create plan ID
         let curr_ts_string = env::block_timestamp().to_string();
-        let mut seed = a_provider_id.as_str().to_owned();
+        let mut seed = provider_id.as_str().to_owned();
         seed.push_str(&curr_ts_string);
 
         let plan_id = bs58::encode(seed.into_bytes())
@@ -295,7 +295,7 @@ impl ProviderActions for Contract {
 
         // initiate the struct and return
         let a_plan = SubscriptionPlan {
-            provider_id: a_provider_id,
+            provider_id: provider_id,
             payment_cycle_length: payment_cycle_length,
             payment_cycle_rate: payment_cycle_rate,
             payment_cycle_count: payment_cycle_count,
