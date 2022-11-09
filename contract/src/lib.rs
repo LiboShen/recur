@@ -130,11 +130,7 @@ impl Contract {
         let deposit = self.get_deposit(&subscription.subscriber_id);
         let cost = self.calcuate_subscription_cost(subscription_id, charge_ts);
 
-        if deposit >= cost {
-            return true;
-        } else {
-            return false;
-        }
+        return deposit >= cost;
     }
 
     // check the depostive amount of a given account
