@@ -330,6 +330,9 @@ impl ProviderActions for Contract {
         transfer the total fees to provider
         */
 
+        let charge_ts = charge_ts.unwrap_or_else(env::block_timestamp);
+        assert!(charge_ts <= env::block_timestamp(),"You can't charge for future time!");
+
         let mut plan = self
             .subscription_plan_by_id
             .get(&plan_id)
