@@ -177,11 +177,9 @@ impl Contract {
         // if the plan has been charged previously, calcualte using updated time
         // treat start_ts as one cycle earlier to achive upfront payment
         let charge_start_ts = max(prev_charge_ts, subscription.start_ts - &plan.payment_cycle_length);
-        
         let duration = charge_end_ts - charge_start_ts;
-
-        // calcuate cost. Subscriber will always be charged upfront for 1 cycle.
-        let count_cycle = 1 + duration / &plan.payment_cycle_length;
+        
+        let count_cycle = duration / &plan.payment_cycle_length;
         let cost = (count_cycle as u128) * &plan.payment_cycle_rate;
 
         return cost;
