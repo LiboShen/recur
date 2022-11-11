@@ -20,6 +20,7 @@ enum StorageKey {
     SubscrtionById,
     SubscriptionPlanById,
     SubscrtionIdsByPlan,
+    SubscrtionIdsByPlanInner { account_id_hash: CryptoHash },
     SubscriptionsPerSubscriber,
     SubscriptionsPerSubscriberInner { account_id_hash: CryptoHash },
     DepositByAccount,
@@ -129,20 +130,22 @@ impl Contract {
             .get(subscription_id)
             .expect("No such subscription!");
 
-        let deposit = self.get_deposit(&subscription.subscriber_id);
+        let deposit = self.get_valid_deposit(&subscription.subscriber_id);
         let cost = self.calcuate_subscription_cost(subscription_id, charge_ts);
 
         return deposit >= cost;
     }
 
     // check the depostive amount of a given account
-    pub fn get_deposit(&mut self, account: &AccountId) -> u128 {
+    pub fn get_valid_deposit(&mut self, account: &AccountId) -> u128 {
         let balance = self
             .deposit_by_account
             .get(&account)
             .expect("No such account!");
 
-        return balance;
+        let total_fees = self.calculate_total_fees_for_subscriber(&account);
+
+        return max(0, balance - total_fees);
     }
 
     // function to calculate the cost of one subscription
@@ -173,25 +176,27 @@ impl Contract {
             "Charge end time can't be in the furture"
         );
 
-
         // if the plan has been charged previously, calcualte using updated time
         // treat start_ts as one cycle earlier to achive upfront payment
-        let charge_start_ts = max(prev_charge_ts, subscription.start_ts - &plan.payment_cycle_length);
+        let charge_start_ts = max(
+            prev_charge_ts,
+            subscription.start_ts - &plan.payment_cycle_length,
+        );
         let duration = charge_end_ts - charge_start_ts;
-        
+
         let count_cycle = duration / &plan.payment_cycle_length;
         let cost = (count_cycle as u128) * &plan.payment_cycle_rate;
 
         return cost;
     }
 
-    // function to calcuate all subscrtions cost from a subscriber
+    // function to calcuate all subscrtions cost for a subscriber
     // This function will be used when calculating withdraw amount of a subscriber
-    fn calculate_total_cost_of_subscriber(&mut self, subscriber_id: &AccountId) -> u128 {
+    fn calculate_total_fees_for_subscriber(&mut self, subscriber_id: &AccountId) -> u128 {
         //1. get all subscritons of one user
-        //2. accumulate cost from all active subscriptions
+        //2. accumulate fees from all active subscriptions
 
-        let mut total_cost: u128 = 0;
+        let mut total_fees: u128 = 0;
         let subscription_ids = self
             .subscriptions_per_subscriber
             .get(&subscriber_id)
@@ -202,15 +207,15 @@ impl Contract {
                 .subscription_by_id
                 .get(&sub_id)
                 .expect("Invalid subscrtion!");
-            // skip cancled subscrtion
+            // skip cancled subscription
             if let SubscriptionState::Canceled = sub.state {
                 continue;
             }
 
-            total_cost += self.calcuate_subscription_cost(&sub_id, None);
+            total_fees += self.calcuate_subscription_cost(&sub_id, None);
         }
 
-        return total_cost;
+        return total_fees;
     }
 
     // hellper function: tranfer FT to account
@@ -467,12 +472,19 @@ impl SubscriberActions for Contract {
         self.subscription_by_id
             .insert(&subscription_id, &a_subscription);
 
+        // TODO: check if all new unordered set from the same provider will be put at the same place
         let mut subscriptions_ids_set = self
             .subscription_ids_by_plan_id
             .get(&plan_id)
             .unwrap_or_else(|| {
                 // if the plan doesn't have any subscriptions, we create a new unordered set
-                UnorderedSet::new(StorageKey::SubscrtionIdsByPlan.try_to_vec().unwrap())
+                UnorderedSet::new(
+                    StorageKey::SubscrtionIdsByPlanInner {
+                        account_id_hash: hash_account_id(&plan.provider_id),
+                    }
+                    .try_to_vec()
+                    .unwrap(),
+                )
             });
         subscriptions_ids_set.insert(&subscription_id);
         self.subscription_ids_by_plan_id
@@ -518,7 +530,7 @@ impl SubscriberActions for Contract {
     #[payable]
     fn withdraw(&mut self, amount: Option<u128>) {
         // 1. get total cost from all subscrtions
-        // 2. find available_fund = deposit - total_cost
+        // 2. find available_fund = deposit - total_fees
         // 3. when not input amount is given, set asking_amount to available_fund
         // if asking_amount < available_fund:
         //          transfer token
@@ -527,15 +539,15 @@ impl SubscriberActions for Contract {
         let user_id = env::predecessor_account_id();
 
         // find withdrawable amount
-        let deposit = self.get_deposit(&user_id);
-        let total_cost = self.calculate_total_cost_of_subscriber(&user_id);
+        let deposit = self.get_valid_deposit(&user_id);
+        let total_fees = self.calculate_total_fees_of_subscriber(&user_id);
         assert!(
-            deposit >= total_cost,
+            deposit >= total_fees,
             "No available fund! Account: {}",
             &user_id
         );
 
-        let available_fund = deposit - total_cost;
+        let available_fund = deposit - total_fees;
 
         // if no input amount is given, withdarw all available fund
         let asking_amount = amount.unwrap_or(available_fund);
