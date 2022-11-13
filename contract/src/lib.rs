@@ -29,8 +29,9 @@ enum StorageKey {
 #[derive(BorshDeserialize, BorshSerialize, Serialize, PartialEq)]
 #[serde(crate = "near_sdk::serde")]
 enum SubscriptionState {
-    Active,
-    Canceled,
+    Active { ts: u64 },   // subscription activated time
+    Canceled { ts: u64 }, // subscription canceld time
+    Invalid, // When canceld subscrtion passed one more payment cycle, it is ready to be removed
 }
 
 // Subscription template
@@ -41,21 +42,23 @@ pub struct SubscriptionPlan {
     //TODO: beneficier: AccountId,
     payment_cycle_length: u64, // base payment cycle (e.g. hour, day, week) in the unit of seconds.
     payment_cycle_rate: u128,  // cost for 1 payment cycle
-    payment_cycle_count: u64,  // total number of paymens. 0 represents indefinte plan
+    payment_cycle_count: u64,  // total number of payments. 0 represents indefinte plan
     // allow_grace_period: u64,    // TODO: grace period in seconds
     plan_name: Option<String>, // name of the plan
-    prev_charge_ts: Option<u64>, // most recent charge of the plan - used for calculating payment amount
-                                 // set to 0 at initialisation
+                               // prev_charge_ts: Option<u64>, // most recent charge of the plan - used for calculating payment amount
+                               //                              // set to 0 at initialisation
 }
+// Actual subscription instance based on SubscriptionPlan
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
-// Actual subscription instance based on SubscriptionPlan
 pub struct Subscription {
-    subscriber_id: AccountId,    // plan subscrtier
-    plan_id: SubscriptionPlanID, // which plan is scubribed to
+    subscriber_id: AccountId,    // plan subscriber
+    plan_id: SubscriptionPlanID, // the subscribed plan
     // prev_charge_ts: u64, // ts of the previous charge. used for deciding whether the next payment is due.
-    state: SubscriptionState, // state of the subscrtion
-    start_ts: u64,            // start of this subscrtion
+    state: SubscriptionState, // state of the subscripion
+    prev_charge_ts: u64,      // most recent charge of the subsciption, initilise to 0
+                              // this will be only updated when funds are actually moved from subscriber's account
+                              // Charge occurs upfront at the start of a cycle.
 }
 
 //Subscription Service Contract
@@ -131,35 +134,62 @@ impl Contract {
             .expect("No such subscription!");
 
         let deposit = self.get_valid_deposit(&subscription.subscriber_id);
-        let cost = self.calcuate_subscription_cost(subscription_id, charge_ts);
+        let cost = self.calcuate_subscription_incurred_cost(subscription_id, charge_ts);
 
         return deposit >= cost;
     }
 
-    // check the depostive amount of a given account
+    // check the depost after removing occured fees
     pub fn get_valid_deposit(&mut self, account: &AccountId) -> u128 {
         let balance = self
             .deposit_by_account
             .get(&account)
-            .expect("No such account!");
+            .expect("The account has no deposit!");
 
         let total_fees = self.calculate_total_fees_for_subscriber(&account);
 
         return max(0, balance - total_fees);
     }
 
-    // function to calculate the cost of one subscription
-    fn calcuate_subscription_cost(
+    // function to calculate the cost of one subscription. This should cover all states.
+    fn calcuate_subscription_incurred_cost(
         &mut self,
         subscription_id: &SubscriptionID,
         end_ts: Option<u64>,
     ) -> u128 {
         // end_ts represents the charge period stop ts. if not given, default to current ts
+        // 1. Active Subscrtion: check the actual charge_start_time
+        // 2. Canceled Subscription: canceled ts is the charge_end_time,
+        //    charge_start_time is the calculated the same way as Active subscription
+        // 3. Invalid subscription: no cost. Waiting to be removed from record
 
         let subscription = self
             .subscription_by_id
             .get(&subscription_id)
             .expect("No such subscription!");
+
+        // get subscription start time
+        let mut start_ts: u64 = 0;
+        // if end_ts is not given, using the current ts
+        let mut charge_end_ts = end_ts.unwrap_or_else(env::block_timestamp);
+
+        match subscription.state {
+            SubscriptionState::Active { ts } => {
+                start_ts = ts;
+            }
+            SubscriptionState::Canceled { ts } => {
+                charge_end_ts = ts;
+            }
+            SubscriptionState::Invalid => {
+                // invalid subscrtion incurrs no cost and is ready to be removed
+                return 0;
+            }
+        }
+
+        assert!(
+            charge_end_ts <= env::block_timestamp(),
+            "Charge end time can't be in the furture!"
+        );
 
         // get the plan details
         let plan = self
@@ -168,20 +198,10 @@ impl Contract {
             .unwrap();
 
         // decide the charge period duration
-        let charge_end_ts = end_ts.unwrap_or_else(env::block_timestamp); // if end_ts is not given, using the current ts
-        let prev_charge_ts = plan.prev_charge_ts.unwrap_or(0);
+        let prev_charge_ts = subscription.prev_charge_ts;
 
-        assert!(
-            charge_end_ts <= env::block_timestamp(),
-            "Charge end time can't be in the furture"
-        );
-
-        // if the plan has been charged previously, calcualte using updated time
-        // treat start_ts as one cycle earlier to achive upfront payment
-        let charge_start_ts = max(
-            prev_charge_ts,
-            subscription.start_ts - &plan.payment_cycle_length,
-        );
+        // if no charge has been taken before, treat start_ts as one cycle earlier to achive upfront payment
+        let charge_start_ts = max(prev_charge_ts, start_ts - &plan.payment_cycle_length);
         let duration = charge_end_ts - charge_start_ts;
 
         let count_cycle = duration / &plan.payment_cycle_length;
@@ -194,7 +214,7 @@ impl Contract {
     // This function will be used when calculating withdraw amount of a subscriber
     fn calculate_total_fees_for_subscriber(&mut self, subscriber_id: &AccountId) -> u128 {
         //1. get all subscritons of one user
-        //2. accumulate fees from all active subscriptions
+        //2. accumulate fees from all subscriptions
 
         let mut total_fees: u128 = 0;
         let subscription_ids = self
@@ -207,12 +227,8 @@ impl Contract {
                 .subscription_by_id
                 .get(&sub_id)
                 .expect("Invalid subscrtion!");
-            // skip cancled subscription
-            if let SubscriptionState::Canceled = sub.state {
-                continue;
-            }
 
-            total_fees += self.calcuate_subscription_cost(&sub_id, None);
+            total_fees += self.calcuate_subscription_incurred_cost(&sub_id, None);
         }
 
         return total_fees;
@@ -223,6 +239,39 @@ impl Contract {
     fn transfer(&self, to: AccountId, amount: Balance) {
         // helper function to perform FT transfer
         Promise::new(to).transfer(amount);
+    }
+
+    // Provider or Subscriber can choose to cancel a service
+    fn cancel_subscription(&mut self, subscription_id: &SubscriptionID) {
+        // updating subscription state
+        // insert the subscription back
+        // cancled subscpriton should incurr cost until current cycle end,
+        // which can be derived from prev_payment_ts and cancelation_ts
+
+        let mut subscription = self
+            .subscription_by_id
+            .get(subscription_id)
+            .expect("No such subscription!");
+
+        let plan = self
+            .subscription_plan_by_id
+            .get(&subscription.plan_id)
+            .unwrap(); // A plan must exist if the subscription exists
+
+        assert!(
+            plan.provider_id == env::predecessor_account_id()
+                || subscription.subscriber_id == env::predecessor_account_id(),
+            "Only the subscriber or service provider can cancel a subscription!"
+        );
+
+        // update subscription state to Canceled
+        subscription.state = SubscriptionState::Canceled {
+            ts: env::block_timestamp(),
+        };
+
+        // insert back to the index
+        self.subscription_by_id
+            .insert(subscription_id, &subscription);
     }
 }
 
@@ -235,7 +284,7 @@ pub trait ProviderActions {
         payment_cycle_rate: u128,
         payment_cycle_count: u64,
         plan_name: Option<String>,
-        prev_charge_ts: Option<u64>,
+        //prev_charge_ts: Option<u64>,
     ) -> SubscriptionPlanID;
 
     // collect fees from a chosen plan.
@@ -245,9 +294,6 @@ pub trait ProviderActions {
         plan_id: SubscriptionPlanID,
         charge_ts: Option<u64>,
     ) -> Vec<(SubscriptionID, bool)>;
-
-    // A provider can choose to stop a service e.g. when a subscription is overdue.
-    fn stop_subscription(&mut self, subscription_id: &SubscriptionID);
 }
 
 pub trait SubscriberActions {
@@ -269,7 +315,7 @@ impl ProviderActions for Contract {
         payment_cycle_rate: u128,
         payment_cycle_count: u64,
         plan_name: Option<String>,
-        prev_charge_ts: Option<u64>,
+        //prev_charge_ts: Option<u64>,
     ) -> SubscriptionPlanID {
         // if no provider is given, using the sender's account id
         let provider_id = provider_id
@@ -306,7 +352,7 @@ impl ProviderActions for Contract {
             payment_cycle_rate: payment_cycle_rate,
             payment_cycle_count: payment_cycle_count,
             plan_name: plan_name,
-            prev_charge_ts: prev_charge_ts,
+            //prev_charge_ts: prev_charge_ts,
         };
 
         // insert the plan into map
@@ -352,7 +398,7 @@ impl ProviderActions for Contract {
         let subscription_ids = self
             .subscription_ids_by_plan_id
             .get(&plan_id)
-            .expect("No existing subscrtions!");
+            .expect("No existing subscriptions!");
 
         let mut total_fees: u128 = 0;
         let mut result: Vec<(SubscriptionID, bool)> = vec![];
@@ -361,18 +407,19 @@ impl ProviderActions for Contract {
             let subscription = self.subscription_by_id.get(&sub_id).unwrap();
 
             // if subscription is not active, skip
-            if subscription.state == SubscriptionState::Canceled {
+            let mut x: u64 = 0;
+            if let SubscriptionState::Canceled { ts: _ } = subscription.state {
                 continue;
             }
 
-            // if deposit is not enough mark false for the result
+            // if deposit is not enough, mark false for the result
             // TODO: charge max available amount from deposit
             if !self.validate_subscription(&sub_id, charge_ts) {
                 result.push((sub_id.clone(), false));
                 continue;
             }
 
-            let fee = self.calcuate_subscription_cost(&sub_id, charge_ts);
+            let fee = self.calcuate_subscription_incurred_cost(&sub_id, charge_ts);
             // udpate deposit
             let mut deposit = self
                 .deposit_by_account
@@ -396,35 +443,6 @@ impl ProviderActions for Contract {
 
         return result;
     }
-
-    fn stop_subscription(&mut self, subscription_id: &SubscriptionID) {
-        // only the service provider can stop the service
-        // stop by updating subscription state
-        // insert the subscription back
-
-        let mut subscription = self
-            .subscription_by_id
-            .get(subscription_id)
-            .expect("No such subscription!");
-
-        // A plan must exist if a subscrtion exists
-        let plan = self
-            .subscription_plan_by_id
-            .get(&subscription.plan_id)
-            .unwrap();
-
-        assert!(
-            plan.provider_id == env::predecessor_account_id(),
-            "Only the service provider can cancel the subscrtion!"
-        );
-
-        // update state
-        subscription.state = SubscriptionState::Canceled;
-
-        // insert back to the index
-        self.subscription_by_id
-            .insert(subscription_id, &subscription);
-    }
 }
 
 #[near_bindgen]
@@ -439,14 +457,10 @@ impl SubscriberActions for Contract {
             .get(&plan_id)
             .expect("No such plan!");
 
-        // validate deposit : deposit should cover at least the 1st payment
-        let balance = self
-            .deposit_by_account
-            .get(&subscriber)
-            .expect("Deposit first before creating subscrptions!");
-
+        // check validate deposit : deposit should cover at least the 1st paymen
+        let valid_deposit = self.get_valid_deposit(&subscriber);
         assert!(
-            balance >= plan.payment_cycle_rate,
+            valid_deposit >= plan.payment_cycle_rate,
             "Deposit is not enough for first payment {rate}",
             rate = &plan.payment_cycle_rate
         );
@@ -461,23 +475,26 @@ impl SubscriberActions for Contract {
             .into_string();
 
         // create the subscription
-        let a_subscription = Subscription {
+        let new_subscription = Subscription {
             subscriber_id: subscriber.clone(),
             plan_id: plan_id.clone(),
-            state: SubscriptionState::Active,
-            start_ts: env::block_timestamp(),
+            state: SubscriptionState::Active {
+                ts: env::block_timestamp(),
+            },
+            prev_charge_ts: 0,
         };
 
-        //record the new subscription in relevant indices
+        //update relevant indices
         self.subscription_by_id
-            .insert(&subscription_id, &a_subscription);
+            .insert(&subscription_id, &new_subscription);
 
-        // TODO: check if all new unordered set from the same provider will be put at the same place
+        //update relevant indices
+        // TODO: check if all new unordered sets of different plans from the same provider will be put at the same memory
         let mut subscriptions_ids_set = self
             .subscription_ids_by_plan_id
             .get(&plan_id)
             .unwrap_or_else(|| {
-                // if the plan doesn't have any subscriptions, we create a new unordered set
+                // if the plan doesn't have any subscription, we create a new unordered set
                 UnorderedSet::new(
                     StorageKey::SubscrtionIdsByPlanInner {
                         account_id_hash: hash_account_id(&plan.provider_id),
@@ -490,6 +507,7 @@ impl SubscriberActions for Contract {
         self.subscription_ids_by_plan_id
             .insert(&plan_id, &subscriptions_ids_set);
 
+        //update relevant indices
         let mut subscriptions_ids_set_2 = self
             .subscriptions_per_subscriber
             .get(&subscriber)
@@ -523,6 +541,8 @@ impl SubscriberActions for Contract {
         // get balance of the account, if the account is not in the map, default the balance to 0
         let mut balance: u128 = self.deposit_by_account.get(&subscriber_id).unwrap_or(0);
         balance += &amount;
+
+        // update index
         self.deposit_by_account.insert(&subscriber_id, &balance);
     }
 
