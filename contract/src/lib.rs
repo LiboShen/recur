@@ -11,6 +11,7 @@ use near_sdk::{
 };
 
 use std::cmp::max;
+use std::cmp::min;
 
 type SubscriptionPlanID = String; // ID for each subscrtion plan
 type SubscriptionID = String;
@@ -59,6 +60,15 @@ pub struct Subscription {
     prev_charge_ts: u64,      // most recent charge of the subsciption, initilise to 0
                               // this will be only updated when funds are actually moved from subscriber's account
                               // Charge occurs upfront at the start of a cycle.
+}
+
+// helper structure for sorting subscrtions by next payment date
+#[derive(BorshDeserialize, BorshSerialize, Serialize)]
+#[serde(crate = "near_sdk::serde")]
+struct SortResultSubscription {
+    subscription_id: SubscriptionID,
+    next_payment_due_ts: u64,
+    incurred_fees: u128,
 }
 
 //Subscription Service Contract
@@ -152,14 +162,14 @@ impl Contract {
     }
 
     // function to calculate the cost of one subscription. This should cover all states.
-    fn calcuate_subscription_incurred_cost(
+    pub fn calcuate_subscription_incurred_cost(
         &mut self,
         subscription_id: &SubscriptionID,
         end_ts: Option<u64>,
     ) -> u128 {
         // end_ts represents the charge period stop ts. if not given, default to current ts
         // 1. Active Subscrtion: check the actual charge_start_time
-        // 2. Canceled Subscription: canceled ts is the charge_end_time,
+        // 2. Canceled Subscription: use canceled ts as the charge_end_time,
         //    charge_start_time is the calculated the same way as Active subscription
         // 3. Invalid subscription: no cost. Waiting to be removed from record
 
@@ -212,7 +222,7 @@ impl Contract {
 
     // function to calcuate all subscrtions cost for a subscriber
     // This function will be used when calculating withdraw amount of a subscriber
-    fn calculate_total_fees_for_subscriber(&mut self, subscriber_id: &AccountId) -> u128 {
+    pub fn calculate_total_fees_for_subscriber(&mut self, subscriber_id: &AccountId) -> u128 {
         //1. get all subscritons of one user
         //2. accumulate fees from all subscriptions
 
@@ -222,13 +232,13 @@ impl Contract {
             .get(&subscriber_id)
             .expect("No subscriptions to charge!");
 
-        for sub_id in subscription_ids.iter() {
+        for subscription_id in subscription_ids.iter() {
             let sub = self
                 .subscription_by_id
-                .get(&sub_id)
+                .get(&subscription_id)
                 .expect("Invalid subscrtion!");
 
-            total_fees += self.calcuate_subscription_incurred_cost(&sub_id, None);
+            total_fees += self.calcuate_subscription_incurred_cost(&subscription_id, None);
         }
 
         return total_fees;
@@ -242,7 +252,7 @@ impl Contract {
     }
 
     // Provider or Subscriber can choose to cancel a service
-    fn cancel_subscription(&mut self, subscription_id: &SubscriptionID) {
+    pub fn cancel_subscription(&mut self, subscription_id: &SubscriptionID) {
         // updating subscription state
         // insert the subscription back
         // cancled subscpriton should incurr cost until current cycle end,
@@ -264,6 +274,14 @@ impl Contract {
             "Only the subscriber or service provider can cancel a subscription!"
         );
 
+        if let SubscriptionState::Active { ts: start_ts } = subscription.state {
+            // when Active subscription is canceled before a charge has even occured,
+            // mark the prev charge ts to be one cycle earlier than active start_ts to enforce upfront payment
+            if subsciption.prev_charge_ts == 0 {
+                subscription.prev_charge_ts = start_ts - plan.payment_cycle_length;
+            }
+        }
+
         // update subscription state to Canceled
         subscription.state = SubscriptionState::Canceled {
             ts: env::block_timestamp(),
@@ -272,6 +290,88 @@ impl Contract {
         // insert back to the index
         self.subscription_by_id
             .insert(subscription_id, &subscription);
+    }
+
+    // function to remove invalid subscriptions
+    pub fn prune_subscriptions(&self) {
+        todo!()
+    }
+
+    fn get_next_payment_due_ts(&self, sub: &Subscription) -> u64 {
+        let plan = self.subscription_plan_by_id.get(&sub.plan_id).unwrap();
+
+        if let SubscriptionState::Invalid = sub.state {
+            return u64::MAX; // invalid subscriton can doesn't has a due date
+        }
+
+        let mut due_ts: u64 = 0;
+        if sub.prev_charge_ts > 0 {
+            due_ts = sub.prev_charge_ts + plan.payment_cycle_length;
+        } else if let SubscriptionState::Active { ts: start_ts } = sub.state {
+            due_ts = start_ts;
+        }
+
+        return due_ts;
+    }
+
+    // helper function to check available fund for one subscrition
+    fn get_available_fund_for_subscription(&self, subscription_id: &SubscriptionID) -> (u128, u128) {
+        /*
+        This function takes into consider the timely order of next due payment date.
+        Return a tuple (available_fund, incurred_fees)
+
+        Assumption: the number of subscriptions from one account is relatively small.
+        So iteration/sort won't be expensive.
+
+        1. Get all subs from the same subscriber
+        2. Sort the subs based on their next payment date.
+        3. For each sub in sorted_subs:
+            Calculate pseudo_available_fund by deducting from account deposit the incurred fees
+            Early stop if pseudo_available_fund becomes 0
+        4. return (pseudo_available_fund, incurred_fees)
+        */
+        let mut target_sub = self
+            .subscription_by_id
+            .get(subscription_id)
+            .expect("No such subscription!");
+
+        let sub_ids = self
+            .subscriptions_per_subscriber
+            .get(&target_sub.subscriber_id)
+            .expect("Error when getting subscriptions from subscriber");
+
+        let mut sorted_subs: Vec<SortResultSubscription> = Vec::new();
+        for sub_id in sub_ids.iter() {
+            let sub = self.subscription_by_id.get(&sub_id).unwrap();
+            let plan = self.subscription_plan_by_id.get(&sub.plan_id).unwrap();
+            let due_payment_ts = self.get_next_payment_due_ts(&sub);
+            let fee = self.calcuate_subscription_incurred_cost(&sub_id, None);
+
+            let sort_sub_result = SortResultSubscription{
+                subscription_id: sub_id,
+                next_payment_due_ts: due_payment_ts,
+                incurred_fees: fee,
+            };
+
+            sorted_subs.push(sort_sub_result);
+        }
+        // sort the result based on payment due ts
+        sorted_subs.sort_by_key(|k| k.next_payment_due_ts);
+
+        let pseudo_deposit = self.deposit_by_account.get(&target_sub.subscriber_id).unwrap();
+        for sub_result in sorted_subs.iter(){
+            pseudo_deposit = max(0, pseudo_deposit - sub_result.incurred_fees);
+            if sub_result.subscription_id.eq(subscription_id){
+                let fund_for_sub = min(pseudo_deposit, sub_result.incurred_fees);
+                return (fund_for_sub, sub_result.incurred_fees);
+            }
+            if pseudo_deposit <= 0 {
+                return (0, sub_result.incurred_fees);
+            }
+        };        
+
+        // if no sub result return. give a dummy return.
+        return(0,0)
     }
 }
 
@@ -288,12 +388,12 @@ pub trait ProviderActions {
     ) -> SubscriptionPlanID;
 
     // collect fees from a chosen plan.
-    // return a list of tuple representing the subscription and if the charge succeeds
+    // return a list of tuple representing the subscription and the collected fees
     fn collect_fees(
         &mut self,
         plan_id: SubscriptionPlanID,
         charge_ts: Option<u64>,
-    ) -> Vec<(SubscriptionID, bool)>;
+    ) -> Vec<(SubscriptionID, u128)>;
 }
 
 pub trait SubscriberActions {
@@ -367,28 +467,33 @@ impl ProviderActions for Contract {
         &mut self,
         plan_id: SubscriptionPlanID,
         charge_ts: Option<u64>,
-    ) -> Vec<(SubscriptionID, bool)> {
-        /* collect fees from all valid subscrtions of a given plan:
-        For each subscrtion of a plan:
-            1. check if the subscription is active
-            2. calculate the correct payment
-            3. validate if deposit is enough
-            3. accumulate total fees
-            4. record charge result & update deposit table
+    ) -> Vec<(SubscriptionID, u128)> {
+        /*
+        Collect fees from active & canceled subscrtions. Return a vector of <(sub_id, charged_fee)>
+        Move canceled subscrtions to Invalid, when current payment cycle ends
+        For each subscriber, fees are charged following time order of payment_due_date
 
-        transfer the total fees to provider
-        update plan prev_charge_ts
-
-        transfer the total fees to provider
+        1. get all subscritions of a plan
+        2. for each subscription:
+            2.1 If state is Invalid: no fee, continue
+            2.2 (available_fund, incurred_fee) = get_available_fund_for_sub(): handles the order by due_payment_time
+                2.2.1 if available_fund < incurred_fee: cancel the subscription
+                2.2.2 internal_transfer_amount = min(available_fund, incurred_fee)
+                      total_fee += internal_transfer_amount
+                      internal_transfer(internal_transfer_amount): update deposit table
+            2.3 update sub details and insert back to indices
+                2.3.1. if State is canceled, check if the current payment cycle has ended,
+                        if so, change state to Invalid and continue
+                2.3.2 update pre_charge_time
+                2.3.3 insert back to indices
+        3. transfer total_fee to provider
         */
 
-        // let charge_ts = charge_ts.unwrap_or_else(env::block_timestamp);
-        if charge_ts.is_some() {
-            assert!(
-                charge_ts.unwrap() <= env::block_timestamp(),
-                "You can't charge for future time!"
-            );
-        }
+        let mut charge_ts = charge_ts.unwrap_or_else(env::block_timestamp);
+        assert!(
+            charge_ts <= env::block_timestamp(),
+            "You can't charge for future time!"
+        );
 
         let mut plan = self
             .subscription_plan_by_id
@@ -400,26 +505,39 @@ impl ProviderActions for Contract {
             .get(&plan_id)
             .expect("No existing subscriptions!");
 
+        // prepare result
         let mut total_fees: u128 = 0;
-        let mut result: Vec<(SubscriptionID, bool)> = vec![];
+        let mut result: Vec<(SubscriptionID, u128)> = vec![];
 
-        for sub_id in subscription_ids.iter() {
-            let subscription = self.subscription_by_id.get(&sub_id).unwrap();
+        for subscription_id in subscription_ids.iter() {
+            let subscription = self.subscription_by_id.get(&subscription_id).unwrap();
 
-            // if subscription is not active, skip
-            let mut x: u64 = 0;
-            if let SubscriptionState::Canceled { ts: _ } = subscription.state {
+            // if subscription Invalid, no fees, skip
+            if let SubscriptionState::Invalid = subscription.state {
+                result.push((subscription_id, 0));
                 continue;
             }
+
+            //2.2
+            let (available_fund, incurred_fees) =
+                self.get_available_fund_for_subscription(&subscription_id);
+
+            
+//////////////////////////////TODO Above ^^^/////////////////
+            // // if Canceled, check if it has become invalid
+            // let mut cancled_ts: u64 = 0;
+            // if let SubscriptionState::Canceled { ts: _ } = subscription.state {
+            //     continue;
+            // }
 
             // if deposit is not enough, mark false for the result
             // TODO: charge max available amount from deposit
-            if !self.validate_subscription(&sub_id, charge_ts) {
-                result.push((sub_id.clone(), false));
+            if !self.validate_subscription(&subscription_id, charge_ts) {
+                result.push((subscription_id.clone(), false));
                 continue;
             }
 
-            let fee = self.calcuate_subscription_incurred_cost(&sub_id, charge_ts);
+            let fee = self.calcuate_subscription_incurred_cost(&subscription_id, charge_ts);
             // udpate deposit
             let mut deposit = self
                 .deposit_by_account
@@ -429,7 +547,7 @@ impl ProviderActions for Contract {
             self.deposit_by_account
                 .insert(&subscription.subscriber_id, &deposit);
             // build result
-            result.push((sub_id.clone(), true));
+            result.push((subscription_id.clone(), true));
 
             // accumulate total fee
             total_fees += fee;
