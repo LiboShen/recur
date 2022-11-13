@@ -1,5 +1,6 @@
 // TODO: Beneficier
 // TODO: NFT contract
+// TODO: Support Multi FTs
 
 use near_contract_standards::non_fungible_token::hash_account_id;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
@@ -62,13 +63,13 @@ pub struct Subscription {
                               // Charge occurs upfront at the start of a cycle.
 }
 
-// helper structure for sorting subscrtions by next payment date
+// helper structure for sorting subscriptions by next payment due time
 #[derive(BorshDeserialize, BorshSerialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 struct SortResultSubscription {
     subscription_id: SubscriptionID,
     next_payment_due_ts: u64,
-    incurred_fees: u128,
+    incurred_fees: u128, // subscrtion cost to be collected
 }
 
 //Subscription Service Contract
@@ -143,79 +144,84 @@ impl Contract {
             .get(subscription_id)
             .expect("No such subscription!");
 
-        let deposit = self.get_valid_deposit(&subscription.subscriber_id);
+        let deposit = self.get_unlocked_deposit(&subscription.subscriber_id);
         let cost = self.calcuate_subscription_incurred_cost(subscription_id, charge_ts);
 
         return deposit >= cost;
     }
 
-    // check the depost after removing occured fees
-    pub fn get_valid_deposit(&mut self, account: &AccountId) -> u128 {
+    // check the depost after removing incurred fees
+    pub fn get_unlocked_deposit(&mut self, account: &AccountId) -> u128 {
         let balance = self
             .deposit_by_account
             .get(&account)
             .expect("The account has no deposit!");
 
-        let total_fees = self.calculate_total_fees_for_subscriber(&account);
+        let total_fees = self.calculate_total_fees_for_subscriber(account);
 
         return max(0, balance - total_fees);
     }
 
-    // function to calculate the cost of one subscription. This should cover all states.
+    // Core function to calculate the cost of one subscription. This should cover all subscrtion states.
     pub fn calcuate_subscription_incurred_cost(
         &mut self,
         subscription_id: &SubscriptionID,
         end_ts: Option<u64>,
     ) -> u128 {
-        // end_ts represents the charge period stop ts. if not given, default to current ts
-        // 1. Active Subscrtion: check the actual charge_start_time
-        // 2. Canceled Subscription: use canceled ts as the charge_end_time,
-        //    charge_start_time is the calculated the same way as Active subscription
-        // 3. Invalid subscription: no cost. Waiting to be removed from record
-
+        /* end_ts represents the charge period stop ts. if not given, default to current ts
+        Decide charge duration:
+        1. Active Subscription:
+              charge_start_ts needs to consider upfront payment
+              charge_end_ts is the given end_ts or current_ts
+        2. Canceled Subscription:
+              prev_charge_ts is decided at cancelation and can be used as charge_start_ts
+              prev_end_ts is the cancled ts, which ensures last payment will be charged
+        3. Invalid subscription: no cost. Ready to be removed from records
+        */
         let subscription = self
             .subscription_by_id
             .get(&subscription_id)
             .expect("No such subscription!");
 
-        // get subscription start time
-        let mut start_ts: u64 = 0;
-        // if end_ts is not given, using the current ts
-        let mut charge_end_ts = end_ts.unwrap_or_else(env::block_timestamp);
-
-        match subscription.state {
-            SubscriptionState::Active { ts } => {
-                start_ts = ts;
-            }
-            SubscriptionState::Canceled { ts } => {
-                charge_end_ts = ts;
-            }
-            SubscriptionState::Invalid => {
-                // invalid subscrtion incurrs no cost and is ready to be removed
-                return 0;
-            }
-        }
-
-        assert!(
-            charge_end_ts <= env::block_timestamp(),
-            "Charge end time can't be in the furture!"
-        );
-
-        // get the plan details
         let plan = self
             .subscription_plan_by_id
             .get(&subscription.plan_id)
             .unwrap();
 
-        // decide the charge period duration
-        let prev_charge_ts = subscription.prev_charge_ts;
+        // Find charge charge_duration
+        let mut charge_start_ts: u64 = 0;
 
-        // if no charge has been taken before, treat start_ts as one cycle earlier to achive upfront payment
-        let charge_start_ts = max(prev_charge_ts, start_ts - &plan.payment_cycle_length);
-        let duration = charge_end_ts - charge_start_ts;
+        // if end_ts is not given, using the current ts
+        let mut charge_end_ts = end_ts.unwrap_or_else(env::block_timestamp);
+        assert!(
+            charge_end_ts <= env::block_timestamp(),
+            "Charge end time can't be in the furture!"
+        );
 
-        let count_cycle = duration / &plan.payment_cycle_length;
-        let cost = (count_cycle as u128) * &plan.payment_cycle_rate;
+        match subscription.state {
+            SubscriptionState::Active { ts: sub_start_ts } => {
+                // if no charge has been taken before, treat start_ts as one cycle earlier, to achive upfront payment
+                charge_start_ts = max(
+                    subscription.prev_charge_ts,
+                    sub_start_ts - &plan.payment_cycle_length,
+                );
+            }
+            SubscriptionState::Canceled { ts: canceled_ts } => {
+                // When a subscription is canceld, its prev_charge_ts has been set accordingly to cover upfront payment
+                charge_start_ts = subscription.prev_charge_ts;
+                // charge ends at the canceld ts, So the last payment cycle will always be charged
+                charge_end_ts = canceled_ts;
+            }
+            SubscriptionState::Invalid => {
+                // invalid subscription incurrs no cost and is ready to be removed
+                return 0;
+            }
+        }
+
+        let charge_duration = charge_end_ts - charge_start_ts;
+        let count_payment_cycles = charge_duration / &plan.payment_cycle_length;
+
+        let cost = (count_payment_cycles as u128) * &plan.payment_cycle_rate;
 
         return cost;
     }
@@ -237,13 +243,6 @@ impl Contract {
         }
 
         return total_fees;
-    }
-
-    // hellper function: tranfer FT to account
-    // TODO: support Multi FT
-    fn transfer(&self, to: AccountId, amount: Balance) {
-        // helper function to perform FT transfer
-        Promise::new(to).transfer(amount);
     }
 
     // Provider or Subscriber can choose to cancel a service
@@ -269,36 +268,50 @@ impl Contract {
             "Only the subscriber or service provider can cancel a subscription!"
         );
 
-        if let SubscriptionState::Active { ts: start_ts } = subscription.state {
-            // when Active subscription is canceled before a charge has even occured,
-            // mark the prev charge ts to be one cycle earlier than active start_ts to enforce upfront payment
-            if subscription.prev_charge_ts == 0 {
-                subscription.prev_charge_ts = start_ts - plan.payment_cycle_length;
+        match subscription.state {
+            SubscriptionState::Active { ts: sub_start_ts } => {
+                // when an Active subscription is canceled before a charge has even occured,
+                // mark the prev charge ts to be one cycle earlier than sub_start_ts to enforce upfront payment
+                // otherwise use the prev_charge_ts
+                if subscription.prev_charge_ts == 0 {
+                    subscription.prev_charge_ts = sub_start_ts - plan.payment_cycle_length;
+                }
+                // update subscription state to Canceled
+                subscription.state = SubscriptionState::Canceled {
+                    ts: env::block_timestamp(),
+                };
+
+                // insert back to the index
+                self.subscription_by_id
+                    .insert(subscription_id, &subscription);
             }
+            SubscriptionState::Canceled { ts: _ } => {
+                env::panic_str("Only Active Subsription can be canceled")
+            }
+            SubscriptionState::Invalid => env::panic_str("Only Active Subsription can be canceled"),
         }
-
-        // update subscription state to Canceled
-        subscription.state = SubscriptionState::Canceled {
-            ts: env::block_timestamp(),
-        };
-
-        // insert back to the index
-        self.subscription_by_id
-            .insert(subscription_id, &subscription);
     }
 
-    // function to remove invalid subscriptions
+    // function to remove invalid subscriptions from storage
     pub fn prune_subscriptions(&self) {
         todo!()
+    }
+
+    fn transfer(&self, to: AccountId, amount: Balance) {
+        // Internal hellper function: tranfer FT to account
+        Promise::new(to).transfer(amount);
     }
 
     fn internal_charge(&mut self, account_id: &AccountId, amount: u128) {
         // helper function to update deposit table internally without actually incurring any on-chain transfer
         // This is to help reduce the amount of - chain actions and to make a final transfer using total amount
 
-        let mut deposit = self.deposit_by_account.get(&account_id).expect("No deposit record!");
+        let mut deposit = self
+            .deposit_by_account
+            .get(&account_id)
+            .expect("No deposit record!");
         // let new_deposit = max(0, deposit-amount);
-        deposit = max(0, deposit-amount);
+        deposit = max(0, deposit - amount);
         self.deposit_by_account.insert(account_id, &deposit);
     }
 
@@ -319,7 +332,7 @@ impl Contract {
         return due_ts;
     }
 
-    // helper function to check available fund for one subscrition
+    // helper function to check available fund for one subscription
     fn get_available_fund_for_subscription(
         &mut self,
         subscription_id: &SubscriptionID,
@@ -471,7 +484,6 @@ impl ProviderActions for Contract {
         return plan_id;
     }
 
-    // TODO: support multi FTs
     #[payable]
     fn collect_fees(
         &mut self,
@@ -545,19 +557,21 @@ impl ProviderActions for Contract {
             self.internal_charge(&subscription.subscriber_id, internal_charge_amount);
 
             // 2.3 Update subscription details and push back to indices
-            if let SubscriptionState::Canceled { ts:_ } = subscription.state{
+            if let SubscriptionState::Canceled { ts: _ } = subscription.state {
                 // if a canceld subscrtion's final cycle has ended. Change state to Invalid
                 let payment_due_ts = self.get_next_payment_due_ts(&subscription);
-                if payment_due_ts < env::block_timestamp(){
+                if payment_due_ts < env::block_timestamp() {
                     subscription.state = SubscriptionState::Invalid;
-                    self.subscription_by_id.insert(&subscription_id, &subscription);
+                    self.subscription_by_id
+                        .insert(&subscription_id, &subscription);
                     result.push((subscription_id, 0));
                     continue;
                 }
             }
 
             subscription.prev_charge_ts = env::block_timestamp();
-            self.subscription_by_id.insert(&subscription_id, &subscription);
+            self.subscription_by_id
+                .insert(&subscription_id, &subscription);
             result.push((subscription_id, internal_charge_amount));
         }
 
@@ -565,7 +579,7 @@ impl ProviderActions for Contract {
         self.transfer(plan.provider_id, total_fees);
 
         return result;
-}
+    }
 }
 
 #[near_bindgen]
@@ -581,7 +595,7 @@ impl SubscriberActions for Contract {
             .expect("No such plan!");
 
         // check validate deposit : deposit should cover at least the 1st paymen
-        let valid_deposit = self.get_valid_deposit(&subscriber);
+        let valid_deposit = self.get_unlocked_deposit(&subscriber);
         assert!(
             valid_deposit >= plan.payment_cycle_rate,
             "Deposit is not enough for first payment {rate}",
@@ -604,7 +618,7 @@ impl SubscriberActions for Contract {
             state: SubscriptionState::Active {
                 ts: env::block_timestamp(),
             },
-            prev_charge_ts: 0,
+            prev_charge_ts: 0, //defaul to 0 to indicate no charge has been taken
         };
 
         //update relevant indices
@@ -678,16 +692,16 @@ impl SubscriberActions for Contract {
         //          update the deposit table
         //          transfer token
         // else: panic
+
         let user_id = env::predecessor_account_id();
 
-        // withdrawable amount
-        let valid_deposit = self.get_valid_deposit(&user_id);
+        let withdrawable_fund = self.get_unlocked_deposit(&user_id);
 
         // if no input amount is given, withdarw all available fund
-        let asking_amount = amount.unwrap_or(valid_deposit);
+        let asking_amount = amount.unwrap_or(withdrawable_fund);
 
         // panic if not enough fund!
-        assert!(valid_deposit >= asking_amount, "Not enough fund!");
+        assert!(withdrawable_fund >= asking_amount, "Not enough fund!");
 
         // update deposit index
         let balance = self
