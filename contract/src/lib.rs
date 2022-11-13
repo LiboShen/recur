@@ -332,12 +332,11 @@ impl Contract {
         return due_ts;
     }
 
-    // helper function to check available fund for one subscription
     fn get_available_fund_for_subscription(
         &mut self,
         subscription_id: &SubscriptionID,
     ) -> (u128, u128) {
-        /*
+        /* Core helper function to check available fund for one subscription
         This function takes into consider the timely order of next due payment date.
         Return a tuple (available_fund, incurred_fees)
 
@@ -490,15 +489,17 @@ impl ProviderActions for Contract {
         plan_id: SubscriptionPlanID,
         charge_ts: Option<u64>,
     ) -> Vec<(SubscriptionID, u128)> {
-        /*
-        Collect fees from active & canceled subscrtions. Return a vector of <(sub_id, charged_fee)>
-        Move canceled subscrtions to Invalid, when current payment cycle ends
-        For each subscriber, fees are charged following time order of payment_due_date
+        /* Core Function. Key features:
+        - Collect fees from active & canceled subscrtions. Return a vector of <(sub_id, charged_fee)>
+        - Move canceled subscrtions to Invalid, when current payment cycle ends.
+        - For each subscriber, fees are charged following time order of payment_due_date
+        - Fees from all subscrtions will be accumulated first and transfer altogether 
+          to provider in one on-chain transaction
 
-        1. get all subscritions of a plan
+        1. get all subscriptions of a plan
         2. for each subscription:
             2.1 If state is Invalid: no fee, continue
-            2.2 (available_fund, incurred_fee) = get_available_fund_for_sub(): handles the order by due_payment_time
+            2.2 (available_fund, incurred_fee) = get_available_fund_for_sub(): handles the charge order by due_payment_time
                 2.2.1 if available_fund < incurred_fee:
                         cancel the subscription
                 2.2.2 internal charge
@@ -536,18 +537,18 @@ impl ProviderActions for Contract {
         for subscription_id in subscription_ids.iter() {
             let mut subscription = self.subscription_by_id.get(&subscription_id).unwrap();
 
-            // if subscription is Invalid, no fees, skip
+            // 2.1 if subscription is Invalid, no fees, skip
             if let SubscriptionState::Invalid = subscription.state {
                 result.push((subscription_id, 0));
                 continue;
             }
 
-            // get the available fund for this subscrtion and incurred fees
+            // 2.2 get the available fund for this subsciption and incurred fees
             let (available_fund, incurred_fees) =
                 self.get_available_fund_for_subscription(&subscription_id);
 
             if available_fund < incurred_fees {
-                // cancel the subscrtion if the the fund is not enough.
+                // cancel the subscription if the fund is not enough.
                 // charge will still be taken in the following steps
                 self.cancel_subscription(&subscription_id);
             }
