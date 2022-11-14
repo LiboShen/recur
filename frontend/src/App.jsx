@@ -8,6 +8,9 @@ import { classNames } from "./Utils";
 
 const navigation = [
   { name: "Home", href: "/", icon: HomeIcon, current: false },
+  { name: "Account", href: "/account", icon: HomeIcon, current: false },
+  { name: "Subscriptions", href: "/subscriptions", icon: HomeIcon, current: false },
+  { name: "Subscription Plans", href: "/plans", icon: HomeIcon, current: false },
 ];
 
 export default function App() {
