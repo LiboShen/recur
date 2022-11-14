@@ -14,15 +14,15 @@ use near_sdk::{
 use std::cmp::max;
 use std::cmp::min;
 
-type SubscriptionPlanID = String; // ID for each subscrtion plan
+type SubscriptionPlanID = String; // ID for each subscription plan
 type SubscriptionID = String;
 
 #[derive(BorshStorageKey, BorshSerialize)]
 enum StorageKey {
-    SubscrtionById,
+    SubscriptionById,
     SubscriptionPlanById,
-    SubscrtionIdsByPlan,
-    SubscrtionIdsByPlanInner { account_id_hash: CryptoHash },
+    SubscriptionIdsByPlan,
+    SubscriptionIdsByPlanInner { account_id_hash: CryptoHash },
     SubscriptionsPerSubscriber,
     SubscriptionsPerSubscriberInner { account_id_hash: CryptoHash },
     DepositByAccount,
@@ -32,8 +32,8 @@ enum StorageKey {
 #[serde(crate = "near_sdk::serde")]
 enum SubscriptionState {
     Active { ts: u64 },   // subscription activated time
-    Canceled { ts: u64 }, // subscription canceld time
-    Invalid, // When canceld subscrtion passed one more payment cycle, it is ready to be removed
+    Canceled { ts: u64 }, // subscription canceled time
+    Invalid, // When canceld subscription passed one more payment cycle, it is ready to be removed
 }
 
 // Subscription template
@@ -69,7 +69,7 @@ pub struct Subscription {
 struct SortResultSubscription {
     subscription_id: SubscriptionID,
     next_payment_due_ts: u64,
-    incurred_fees: u128, // subscrtion cost to be collected
+    incurred_fees: u128, // subscription cost to be collected
 }
 
 //Subscription Service Contract
@@ -80,7 +80,7 @@ pub struct Contract {
     subscription_plan_by_id: UnorderedMap<SubscriptionPlanID, SubscriptionPlan>,
     subscription_by_id: UnorderedMap<SubscriptionID, Subscription>,
     subscription_ids_by_plan_id: LookupMap<SubscriptionPlanID, UnorderedSet<SubscriptionID>>, // helper structure for viewing
-    subscriptions_per_subscriber: LookupMap<AccountId, UnorderedSet<SubscriptionID>>, // heper structure to group all subscrtions under one user
+    subscriptions_per_subscriber: LookupMap<AccountId, UnorderedSet<SubscriptionID>>, // heper structure to group all subscriptions under one user
     deposit_by_account: UnorderedMap<AccountId, u128>, // subscriber and her deposit
                                                        //TODO: deposit_map_multi_token: UnorderedMap<AccountId, UnorderedMap<AccountId, u128>>
 }
@@ -93,9 +93,9 @@ impl Contract {
         let this = Self {
             owner: owner_id,
             subscription_plan_by_id: UnorderedMap::new(StorageKey::SubscriptionPlanById),
-            subscription_by_id: UnorderedMap::new(StorageKey::SubscrtionById),
+            subscription_by_id: UnorderedMap::new(StorageKey::SubscriptionById),
             subscription_ids_by_plan_id: LookupMap::new(
-                StorageKey::SubscrtionIdsByPlan.try_to_vec().unwrap(),
+                StorageKey::SubscriptionIdsByPlan.try_to_vec().unwrap(),
             ),
             subscriptions_per_subscriber: LookupMap::new(
                 StorageKey::SubscriptionsPerSubscriber.try_to_vec().unwrap(),
@@ -162,7 +162,7 @@ impl Contract {
         return max(0, balance - total_fees);
     }
 
-    // Core function to calculate the cost of one subscription. This should cover all subscrtion states.
+    // Core function to calculate the cost of one subscription. This should cover all subscription states.
     pub fn calcuate_subscription_incurred_cost(
         &mut self,
         subscription_id: &SubscriptionID,
@@ -226,7 +226,7 @@ impl Contract {
         return cost;
     }
 
-    // function to calcuate all subscrtions cost for a subscriber
+    // function to calcuate all subscriptions cost for a subscriber
     // This function will be used when calculating withdraw amount of a subscriber
     pub fn calculate_total_fees_for_subscriber(&mut self, subscriber_id: &AccountId) -> u128 {
         //1. get all subscritons of one user
@@ -490,11 +490,11 @@ impl ProviderActions for Contract {
         charge_ts: Option<u64>,
     ) -> Vec<(SubscriptionID, u128)> {
         /* Core Function. Key features:
-        - Collect fees from active & canceled subscrtions. Return a vector of <(sub_id, charged_fee)>
-        - Move canceled subscrtions to Invalid, when current payment cycle ends.
-        - For each subscriber, fees are charged following time order of payment_due_date
-        - Fees from all subscrtions will be accumulated first and transfer altogether 
-          to provider in one on-chain transaction
+        - Collect fees from active & canceled subscriptions. Return a vector of <(sub_id, charged_fee)>
+        - Move canceled subscriptions to Invalid, when the final payment cycle ends.
+        - For each subscriber, fees are charged following timely order of payment_due_date
+        - Fees from all subscriptions will be accumulated first and transfer altogether at the end
+          to the provider in one on-chain transaction
 
         1. get all subscriptions of a plan
         2. for each subscription:
@@ -507,8 +507,8 @@ impl ProviderActions for Contract {
                       total_fee += internal_charge_amount
                       internal_charge(internal_charge_amount): update deposit table
             2.3 update sub details and insert back to indices
-                2.3.1. if State is canceled, check if the current payment cycle has ended,
-                        if so, change state to Invalid & update indices. Then continue
+                2.3.1. if State is canceled, check if the final payment cycle has ended,
+                        if so, change state to Invalid & update indices. Then continue.
                 2.3.2 update pre_charge_time
                 2.3.3 insert back to indices
         3. transfer total_fee to provider
@@ -559,7 +559,7 @@ impl ProviderActions for Contract {
 
             // 2.3 Update subscription details and push back to indices
             if let SubscriptionState::Canceled { ts: _ } = subscription.state {
-                // if a canceld subscrtion's final cycle has ended. Change state to Invalid
+                // if a canceld subscription's final cycle has ended. Change state to Invalid
                 let payment_due_ts = self.get_next_payment_due_ts(&subscription);
                 if payment_due_ts < env::block_timestamp() {
                     subscription.state = SubscriptionState::Invalid;
@@ -634,7 +634,7 @@ impl SubscriberActions for Contract {
             .unwrap_or_else(|| {
                 // if the plan doesn't have any subscription, we create a new unordered set
                 UnorderedSet::new(
-                    StorageKey::SubscrtionIdsByPlanInner {
+                    StorageKey::SubscriptionIdsByPlanInner {
                         account_id_hash: hash_account_id(&plan.provider_id),
                     }
                     .try_to_vec()
