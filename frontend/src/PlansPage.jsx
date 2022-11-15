@@ -1,7 +1,7 @@
 import React from "react";
 // import { claimBack, myLendings } from "./near-api";
 
-export default function LendingsPage() {
+export default function PlansPage() {
   const [plans, setPlans] = React.useState([]);
 
   // React.useEffect(() => {
@@ -28,7 +28,7 @@ export default function LendingsPage() {
             className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
             href="/plans/new"
           >
-            Create New Subscription Plan
+            Create New Plan
           </a>
         </div>
       </div>
@@ -43,25 +43,25 @@ export default function LendingsPage() {
                       scope="col"
                       className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6"
                     >
-                      Contract
+                      Name
                     </th>
                     <th
                       scope="col"
                       className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
                     >
-                      Token
+                      Frequency
                     </th>
                     <th
                       scope="col"
                       className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
                     >
-                      State
+                      Duration
                     </th>
                     <th
                       scope="col"
                       className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
                     >
-                      Expired
+                      Price
                     </th>
                     <th
                       scope="col"
