@@ -1,6 +1,8 @@
 // TODO: Beneficier
 // TODO: NFT contract
 // TODO: Support Multi FTs
+// TODO: Revist if we need a state for user. E.g. if a user has unsettled payment, 
+//       he should not be allowed to create new subscriptions
 
 use near_contract_standards::non_fungible_token::hash_account_id;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
@@ -138,12 +140,14 @@ impl Contract {
         //check deposit
         //check currrent cost
         //compare
+        // TODO(Steven): inspect the handling of different subscription state. 
 
         let subscription = self
-            .subscription_by_id
-            .get(subscription_id)
-            .expect("No such subscription!");
-
+        .subscription_by_id
+        .get(subscription_id)
+        .expect("No such subscription!");
+        
+        // TODO: inspect and fix duplicate cost calcuations 
         let deposit = self.get_unlocked_deposit(&subscription.subscriber_id);
         let cost = self.calcuate_subscription_incurred_cost(subscription_id, charge_ts);
 
@@ -337,7 +341,7 @@ impl Contract {
         subscription_id: &SubscriptionID,
     ) -> (u128, u128) {
         /* Core helper function to check available fund for one subscription
-        This function takes into consider the timely order of next due payment date.
+        This function takes into consideration the timely order of next due payment date.
         Return a tuple (available_fund, incurred_fees)
 
         Assumption: the number of subscriptions from one account is relatively small.
@@ -381,7 +385,9 @@ impl Contract {
             .deposit_by_account
             .get(&target_sub.subscriber_id)
             .unwrap();
+
         for sub_result in sorted_subs.iter() {
+            // TODO(libo): provide a test to demo the charge ordering problem.
             pseudo_deposit = max(0, pseudo_deposit - sub_result.incurred_fees);
             if sub_result.subscription_id.eq(subscription_id) {
                 let fund_for_sub = min(pseudo_deposit, sub_result.incurred_fees);
@@ -392,8 +398,9 @@ impl Contract {
             }
         }
 
-        // if no sub result return. give a dummy return.
-        return (0, 0);
+        // if no sub result is returned, there must be error in finding target sub's fund.
+        env::panic_str("Sorted subscriptions result is empty");
+
     }
 }
 
@@ -551,6 +558,10 @@ impl ProviderActions for Contract {
                 // cancel the subscription if the fund is not enough.
                 // charge will still be taken in the following steps
                 self.cancel_subscription(&subscription_id);
+                
+                // TODO: Revisit if whe should immediately invalidate the subscription when fund becomes insufficient.
+                // Reasoning: if someone missed a payment before, they shouldn't be served even within this cycle. 
+                // But to make the logic fair, we also need to avoid partial payment
             }
 
             let internal_charge_amount = min(available_fund, incurred_fees);
