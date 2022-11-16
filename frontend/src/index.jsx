@@ -4,27 +4,28 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App";
 import Home from "./Home";
+import NewPlanPage from "./NewPlanPage";
+import PlansPage from "./PlansPage";
+import SubscriptionsPage from "./SubscriptionsPage";
+import SubscribePage from "./SubscribePage";
 import { initContract } from "./near-api";
-import {
-  ApolloClient,
-  InMemoryCache,
-  ApolloProvider,
-} from "@apollo/client";
 
 const reactRoot = createRoot(document.querySelector("#root"));
 
 window.nearInitPromise = initContract()
   .then(() => {
     reactRoot.render(
-      <ApolloProvider client={mintbaseClient}>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<App />}>
-              <Route index element={<Home />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
-      </ApolloProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<App />}>
+            <Route index element={<Home />} />
+            <Route path="plans/new" element={<NewPlanPage />} />
+            <Route path="plans" element={<PlansPage />} />
+            <Route path="subscriptions" element={<SubscriptionsPage />} />
+            <Route path="plans/:planId/subscribe" element={<SubscribePage />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
     );
   })
   .catch((e) => {
@@ -36,7 +37,3 @@ window.nearInitPromise = initContract()
     console.error(e);
   });
 
-const mintbaseClient = new ApolloClient({
-  uri: "https://interop-testnet.hasura.app/v1/graphql",
-  cache: new InMemoryCache(),
-});
