@@ -10,7 +10,7 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 md:px-8">
           <div className="flex flex-col space-y-4 max-w-md mx-auto">
             <a
-              href="/accout"
+              href="/account"
               className="inline-flex items-center rounded-md border border-gray-300 bg-white px-6 py-3 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
             >
               View My Account

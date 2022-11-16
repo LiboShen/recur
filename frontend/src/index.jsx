@@ -8,6 +8,7 @@ import NewPlanPage from "./NewPlanPage";
 import PlansPage from "./PlansPage";
 import SubscriptionsPage from "./SubscriptionsPage";
 import SubscribePage from "./SubscribePage";
+import AccountPage from "./AccountPage";
 import { initContract } from "./near-api";
 
 const reactRoot = createRoot(document.querySelector("#root"));
@@ -19,6 +20,7 @@ window.nearInitPromise = initContract()
         <Routes>
           <Route path="/" element={<App />}>
             <Route index element={<Home />} />
+            <Route path="account" element={<AccountPage />} />
             <Route path="plans/new" element={<NewPlanPage />} />
             <Route path="plans" element={<PlansPage />} />
             <Route path="subscriptions" element={<SubscriptionsPage />} />

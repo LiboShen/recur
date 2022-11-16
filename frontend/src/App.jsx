@@ -2,15 +2,15 @@ import { Fragment, useState } from "react";
 import { Outlet } from "react-router-dom";
 import UserWidget from "./UserWidget";
 import { Dialog, Transition } from "@headlessui/react";
-import { Bars3BottomLeftIcon, BellIcon, HomeIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { Bars3BottomLeftIcon, BellIcon, HomeIcon, XMarkIcon, BuildingLibraryIcon, DocumentChartBarIcon, CubeIcon } from "@heroicons/react/24/outline";
 import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { classNames } from "./Utils";
 
 const navigation = [
   { name: "Home", href: "/", icon: HomeIcon, current: false },
-  { name: "Account", href: "/account", icon: HomeIcon, current: false },
-  { name: "Subscriptions", href: "/subscriptions", icon: HomeIcon, current: false },
-  { name: "Subscription Plans", href: "/plans", icon: HomeIcon, current: false },
+  { name: "Account", href: "/account", icon: BuildingLibraryIcon, current: false },
+  { name: "Subscriptions", href: "/subscriptions", icon: CubeIcon, current: false },
+  { name: "Subscription Plans", href: "/plans", icon: DocumentChartBarIcon, current: false },
 ];
 
 export default function App() {
