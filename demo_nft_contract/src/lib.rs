@@ -1,9 +1,0 @@
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::{near_bindgen, PanicOnDefault, PromiseOrValue};
-
-#[near_bindgen]
-#[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
-pub struct Contract {}
-
-#[near_bindgen]
-impl Contract {}

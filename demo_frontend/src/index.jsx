@@ -4,7 +4,8 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import App from "./App";
 import Home from "./Home";
-import PetPage from "./Pet";
+import PricingPage from "./Pricing";
+import PostsPage from "./Posts";
 import { initContract } from "./near-api";
 import {
   ApolloClient,
@@ -23,7 +24,8 @@ window.nearInitPromise = initContract()
           <Routes>
             <Route path="/" element={<App />}>
               <Route index element={<Home />} />
-              <Route path="/pets/:contractId/:petId" element={<PetPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/posts" element={<PostsPage />} />
             </Route>
           </Routes>
         </BrowserRouter>
