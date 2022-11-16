@@ -21,14 +21,6 @@ export default function SubscriptionsPage() {
         <div className="sm:flex-auto">
           <h1 className="text-xl font-semibold text-gray-900">My Subscription Plans</h1>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-          <a
-            className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-            href="/plans/new"
-          >
-            Create New Subscription
-          </a>
-        </div>
       </div>
       <div className="mt-8 flex flex-col">
         <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
@@ -47,7 +39,7 @@ export default function SubscriptionsPage() {
                       scope="col"
                       className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
                     >
-                      Frequency
+                      Start Time
                     </th>
                     <th
                       scope="col"
@@ -59,7 +51,7 @@ export default function SubscriptionsPage() {
                       scope="col"
                       className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900"
                     >
-                      Price
+                      Rate
                     </th>
                     <th
                       scope="col"
