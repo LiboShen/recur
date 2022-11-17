@@ -193,6 +193,17 @@ impl Contract {
         return max(0, balance - total_fees);
     }
 
+    // function to return balance in the deposit table.
+    // Not all balance is usable as it includes locked fees.
+    pub fn get_account_balance(&mut self, account: &AccountId) -> u128 {
+        let balance = self
+            .deposit_by_account
+            .get(&account)
+            .expect("The account has no deposit!");
+
+        return balance;
+    }
+
     // Core function to calculate the cost of one subscription. This should cover all subscription states.
     pub fn calcuate_subscription_incurred_cost(
         &mut self,
@@ -557,6 +568,12 @@ impl ProviderActions for Contract {
             .subscription_plan_by_id
             .get(&plan_id)
             .expect("No such plan!");
+
+        assert!(
+            plan.provider_id == env::predecessor_account_id()
+                || self.owner == env::predecessor_account_id(),
+            "Only the Provider or Service and collect fees for the provider"
+        );
 
         let subscription_ids = self
             .subscription_ids_by_plan_id
