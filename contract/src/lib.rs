@@ -1,7 +1,7 @@
 // TODO: Beneficier
 // TODO: NFT contract
 // TODO: Support Multi FTs
-// TODO: Revist if we need a state for user. E.g. if a user has unsettled payment, 
+// TODO: Revist if we need a state for user. E.g. if a user has unsettled payment,
 //       he should not be allowed to create new subscriptions
 
 use near_contract_standards::non_fungible_token::hash_account_id;
@@ -115,6 +115,15 @@ impl Contract {
         return plan;
     }
 
+    pub fn get_subscription(&mut self, subscription_id: SubscriptionID) -> Subscription {
+        let sub = self
+            .subscription_by_id
+            .get(&subscription_id)
+            .expect("No such subscription!");
+
+        return sub;
+    }
+
     // get all subscriptions of a given plan
     // TODO: results can be a None. Return an option
     pub fn list_subscriptions_by_plan_id(
@@ -141,14 +150,14 @@ impl Contract {
         //check deposit
         //check currrent cost
         //compare
-        // TODO(Steven): inspect the handling of different subscription state. 
+        // TODO(Steven): inspect the handling of different subscription state.
 
         let subscription = self
-        .subscription_by_id
-        .get(subscription_id)
-        .expect("No such subscription!");
-        
-        // TODO: inspect and fix duplicate cost calcuations 
+            .subscription_by_id
+            .get(subscription_id)
+            .expect("No such subscription!");
+
+        // TODO: inspect and fix duplicate cost calcuations
         let deposit = self.get_unlocked_deposit(&subscription.subscriber_id);
         let cost = self.calcuate_subscription_incurred_cost(subscription_id, charge_ts);
 
@@ -239,11 +248,11 @@ impl Contract {
 
         let mut total_fees: u128 = 0;
         let subscriptions_ids_check = self.subscriptions_per_subscriber.get(&subscriber_id);
-        if let Some(subscription_ids) = subscriptions_ids_check{
+        if let Some(subscription_ids) = subscriptions_ids_check {
             for subscription_id in subscription_ids.iter() {
                 total_fees += self.calcuate_subscription_incurred_cost(&subscription_id, None);
             }
-        } else{
+        } else {
             // fee is 0 when no subscriptions exist.
             return 0;
         }
@@ -401,7 +410,6 @@ impl Contract {
 
         // if no sub result is returned, there must be error in finding target sub's fund.
         env::panic_str("Sorted subscriptions result is empty");
-
     }
 }
 
@@ -559,9 +567,9 @@ impl ProviderActions for Contract {
                 // cancel the subscription if the fund is not enough.
                 // charge will still be taken in the following steps
                 self.cancel_subscription(&subscription_id);
-                
+
                 // TODO: Revisit if whe should immediately invalidate the subscription when fund becomes insufficient.
-                // Reasoning: if someone missed a payment before, they shouldn't be served even within this cycle. 
+                // Reasoning: if someone missed a payment before, they shouldn't be served even within this cycle.
                 // But to make the logic fair, we also need to avoid partial payment
             }
 
