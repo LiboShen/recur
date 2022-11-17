@@ -576,7 +576,7 @@ impl ProviderActions for Contract {
         assert!(
             plan.provider_id == env::predecessor_account_id()
                 || self.owner == env::predecessor_account_id(),
-            "Only the Provider or Service and collect fees for the provider"
+            "Only the Provider or Service owner can collect fees for the provider"
         );
 
         let subscription_ids = self
