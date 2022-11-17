@@ -4,15 +4,15 @@
 
 yarn deploy
 
-export SERVICE_CONTRACT_ID=ty_dev.testnet
+export SERVICE_CONTRACT_OWNER=ty_dev.testnet
 export SUBSCRIBER_ID=crypto_ty.testnet
 export PROVIDER_ID=ty_dev_2.testnet
 export CONTRACT_ADDR=dev-1668677946314-54468871935084
 
 // initialise a contract
-near call dev-1668677946314-54468871935084 new '{"owner_id": "'$SERVICE_CONTRACT_ID'"}' --accountId $SERVICE_CONTRACT_ID
+near call dev-1668677946314-54468871935084 new '{"owner_id": "'$SERVICE_CONTRACT_OWNER'"}' --accountId $SERVICE_CONTRACT_OWNER
 
-// Provider: Test Create a Plan -- SUCCESS plan-id:Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8
+// Provider: Test Create a Plan -- SUCCEEDED plan-id:Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8
 near call $CONTRACT_ADDR create_subscription_plan '{
     "provider_id":"'$PROVIDER_ID'",
     "payment_cycle_length":60,
@@ -26,44 +26,49 @@ near call $CONTRACT_ADDR create_subscription_plan '{
 
 // Provider: collect fees
 
-// Contract: View existing plan -- SUCCESS
+// Contract: View existing plan -- SUCCEEDED
 near call $CONTRACT_ADDR get_plan '{
   "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
   }' --accountId $PROVIDER_ID
 
 // Contract: View subscription of a plan
 near call $CONTRACT_ADDR list_subscriptions_by_plan_id '{
-  "account": "'SUBSCRIBER_ID'"
-  }' --accountId $SUBSCRIBER_ID
+  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $SERVICE_CONTRACT_OWNER
 
-// Contract: get deposit of a user -- FAILED
+// Contract: get deposit of a user -- SUCCEEDED
 near call $CONTRACT_ADDR get_unlocked_deposit '{
-  "account": "'$PROVIDER_ID'"
-  }' --accountId $PROVIDER_ID
+  "account": "'$SUBSCRIBER_ID'"
+  }' --accountId $SUBSCRIBER_ID
 
 //Contract: cancel subscription & panic -- SUCCEEDED
 near call $CONTRACT_ADDR cancel_subscription '{
     "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
   }' --accountId $CONTRACT_ADDR 
 
-//Contract: get a subscription -- SUCCEEDED
+//Contract: get a subsciption -- SUCCEEDED
 near call $CONTRACT_ADDR get_subscription '{
   "subscription_id": "koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
   }' --accountId $SUBSCRIBER_ID
 
-// Subscriber: deposit -- SUCCESS
+//Contract: validate a subscription -- SUCCEEDED
+near call $CONTRACT_ADDR validate_subscription '{
+  "subscription_id": "koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  }' --accountId $SERVICE_CONTRACT_OWNER
+
+// Subscriber: deposit -- SUCCEEDED
 near call $CONTRACT_ADDR deposit '{
   "subscriber_id": "'$SUBSCRIBER_ID'"
   }' --accountId $SUBSCRIBER_ID --depositYocto 10000000000000000000000
 
 
-// Subscriber: Creat a subscripton & Panic if not enough subscription -- SUCCESS
+// Subscriber: Creat a subscripton & Panic if not enough subscription -- SUCCEEDED
 near call $CONTRACT_ADDR create_subscription '{
     "plan_id":"Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
   }' --accountId $SUBSCRIBER_ID 
 
 
-// Subscriber: Creat a subscripton when enough deposit -- SUCCESS (sub_id:koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T)
+// Subscriber: Creat a subscripton when enough deposit -- SUCCEEDED (sub_id:koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T)
 near call $CONTRACT_ADDR create_subscription '{
     "plan_id":"Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
   }' --accountId $SUBSCRIBER_ID 
@@ -75,7 +80,7 @@ near call $CONTRACT_ADDR create_subscription '{
 
 // Subscriber: multiple subscriptions from different plans
 
-// Subscriber: calculate subscription cost -- SUCCESS
+// Subscriber: calculate subscription cost -- SUCCEEDED
 near call $CONTRACT_ADDR calcuate_subscription_incurred_cost '{
     "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
   }' --accountId $SUBSCRIBER_ID 

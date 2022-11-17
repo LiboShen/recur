@@ -125,7 +125,6 @@ impl Contract {
     }
 
     // get all subscriptions of a given plan
-    // TODO: results can be a None. Return an option
     pub fn list_subscriptions_by_plan_id(
         &mut self,
         plan_id: SubscriptionPlanID,
@@ -133,6 +132,24 @@ impl Contract {
         let mut results: Vec<(SubscriptionID, Subscription)> = vec![];
 
         let ids = self.subscription_ids_by_plan_id.get(&plan_id).unwrap();
+        for id in ids.iter() {
+            let sub = self.subscription_by_id.get(&id).unwrap();
+            results.push((id, sub));
+        }
+        return results;
+    }
+
+    // get all subscriptions of a user
+    pub fn list_subscriptions_by_subscriber(
+        &mut self,
+        subscriber_id: AccountId,
+    ) -> Vec<(SubscriptionID, Subscription)> {
+        let mut results: Vec<(SubscriptionID, Subscription)> = vec![];
+
+        let ids = self
+            .subscriptions_per_subscriber
+            .get(&subscriber_id)
+            .unwrap();
         for id in ids.iter() {
             let sub = self.subscription_by_id.get(&id).unwrap();
             results.push((id, sub));
