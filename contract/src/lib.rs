@@ -242,15 +242,15 @@ impl Contract {
         //2. accumulate fees from all subscriptions
 
         let mut total_fees: u128 = 0;
-        let subscription_ids = self
-            .subscriptions_per_subscriber
-            .get(&subscriber_id)
-            .expect("No subscriptions to charge!");
-
-        for subscription_id in subscription_ids.iter() {
-            total_fees += self.calcuate_subscription_incurred_cost(&subscription_id, None);
+        let subscriptions_ids_check = self.subscriptions_per_subscriber.get(&subscriber_id);
+        if let Some(subscription_ids) = subscriptions_ids_check{
+            for subscription_id in subscription_ids.iter() {
+                total_fees += self.calcuate_subscription_incurred_cost(&subscription_id, None);
+            }
+        } else{
+            // fee is 0 when no subscriptions exist.
+            return 0;
         }
-
         return total_fees;
     }
 
