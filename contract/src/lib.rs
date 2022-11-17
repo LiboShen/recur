@@ -131,10 +131,6 @@ impl Contract {
         return results;
     }
 
-    // function to return the deposit of an account
-    pub fn get_deposit(&mut self, account_id: &AccountId) -> u128{
-        todo!()
-    }
     // check if a subscriber has enough funds
     // this can be used by providers to decide if service should be suspended
     pub fn validate_subscription(
