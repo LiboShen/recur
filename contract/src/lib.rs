@@ -10,7 +10,8 @@ use near_sdk::bs58;
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::serde::Serialize;
 use near_sdk::{
-    env, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault, Promise,
+    env, log, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault,
+    Promise,
 };
 
 use std::cmp::max;
@@ -328,7 +329,10 @@ impl Contract {
                     .insert(subscription_id, &subscription);
             }
             SubscriptionState::Canceled { ts: _ } => {
-                env::panic_str("Only Active Subsription can be canceled")
+                log!(
+                    "Subsription has already been canceled. No action. subscription_id: {}",
+                    &subscription_id
+                )
             }
             SubscriptionState::Invalid => env::panic_str("Only Active Subsription can be canceled"),
         }
@@ -374,7 +378,7 @@ impl Contract {
         return due_ts;
     }
 
-    fn get_available_fund_for_subscription(
+    pub fn get_available_fund_for_subscription(
         &mut self,
         subscription_id: &SubscriptionID,
     ) -> (u128, u128) {
@@ -593,7 +597,7 @@ impl ProviderActions for Contract {
                 continue;
             }
 
-            // 2.2 get the available fund for this subsciption and incurred fees
+            // 2.2 get the available fund for this subscription and incurred fees
             let (available_fund, incurred_fees) =
                 self.get_available_fund_for_subscription(&subscription_id);
 
