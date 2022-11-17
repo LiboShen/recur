@@ -116,6 +116,7 @@ impl Contract {
     }
 
     // get all subscriptions of a given plan
+    // TODO: results can be a None. Return an option
     pub fn list_subscriptions_by_plan_id(
         &mut self,
         plan_id: SubscriptionPlanID,
@@ -130,6 +131,10 @@ impl Contract {
         return results;
     }
 
+    // function to return the deposit of an account
+    pub fn get_deposit(&mut self, account_id: &AccountId) -> u128{
+        todo!()
+    }
     // check if a subscriber has enough funds
     // this can be used by providers to decide if service should be suspended
     pub fn validate_subscription(

@@ -1,3 +1,62 @@
+//deplyed to dev-1668677946314-54468871935084 ty_dev.testnet
+// crypto_ty.testnet: subscriber
+// ty_dev_2.
+
+yarn deploy
+
+export SERVICE_CONTRACT_ID=ty_dev.testnet
+export SUBSCRIBER_ID=crypto_ty.testnet
+export PROVIDER_ID=ty_dev_2.testnet
+export CONTRACT_ADDR=dev-1668677946314-54468871935084
+
+// initialise a contract
+near call dev-1668677946314-54468871935084 new '{"owner_id": "'$SERVICE_CONTRACT_ID'"}' --accountId $SERVICE_CONTRACT_ID
+
+// Provider: Test Create a Plan -- SUCCESS plan-id:Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8
+near call $CONTRACT_ADDR create_subscription_plan '{
+    "provider_id":"'$PROVIDER_ID'",
+    "payment_cycle_length":60,
+    "payment_cycle_rate":1,
+    "payment_cycle_count":5,
+    "plan_name":"test_plan_1"
+  }' --accountId $PROVIDER_ID
+
+
+// Provider: check collectable fees
+
+// Provider: collect fees
+
+// Contract: View existing plan -- SUCCESS
+near call $CONTRACT_ADDR get_plan '{
+  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $PROVIDER_ID
+
+// Contract: View subscription of a plan
+near call $CONTRACT_ADDR list_subscriptions_by_plan_id '{
+  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $PROVIDER_ID
+
+// Subscriber: deposit
+near call $CONTRACT_ADDR deposit '{
+  "subscriber_id": "'$SUBSCRIBER_ID'"
+  }' --accountId $SUBSCRIBER_ID --depositYocto 10000000000000000000000
+
+// Subscriber: Creat a subscripton & Panice if not enough subscription -- SUCCESS
+near call $CONTRACT_ADDR create_subscription '{
+    "plan_id":"Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $SUBSCRIBER_ID 
+
+
+// Subscriber: withdarw fund
+
+// Subscriber: multiple subscribers to the same plan
+
+// Subscriber: multiple subscription to different plans
+
+
+
+
+==========================
 // create a new nft
 near call nft.examples.testnet nft_mint '{"token_id": "lease_test", "receiver_id": "crypto_ty.testnet", "metadata": { "title": "GO TEAM", "description": "The Team Goes", "media": "https://bafybeidl4hjbpdr6u6xvlrizwxbrfcyqurzvcnn5xoilmcqbxfbdwrmp5m.ipfs.dweb.link/", "copies": 1}}' --accountId $NEARID --deposit 0.1
 
