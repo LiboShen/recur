@@ -33,15 +33,37 @@ near call $CONTRACT_ADDR get_plan '{
 
 // Contract: View subscription of a plan
 near call $CONTRACT_ADDR list_subscriptions_by_plan_id '{
-  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  "account": "'SUBSCRIBER_ID'"
+  }' --accountId $SUBSCRIBER_ID
+
+// Contract: get deposit of a user -- FAILED
+near call $CONTRACT_ADDR get_unlocked_deposit '{
+  "account": "'$PROVIDER_ID'"
   }' --accountId $PROVIDER_ID
 
-// Subscriber: deposit
+//Contract: cancel subscription & panic -- SUCCEEDED
+near call $CONTRACT_ADDR cancel_subscription '{
+    "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  }' --accountId $CONTRACT_ADDR 
+
+//Contract: get a subscription -- SUCCEEDED
+near call $CONTRACT_ADDR get_subscription '{
+  "subscription_id": "koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  }' --accountId $SUBSCRIBER_ID
+
+// Subscriber: deposit -- SUCCESS
 near call $CONTRACT_ADDR deposit '{
   "subscriber_id": "'$SUBSCRIBER_ID'"
   }' --accountId $SUBSCRIBER_ID --depositYocto 10000000000000000000000
 
-// Subscriber: Creat a subscripton & Panice if not enough subscription -- SUCCESS
+
+// Subscriber: Creat a subscripton & Panic if not enough subscription -- SUCCESS
+near call $CONTRACT_ADDR create_subscription '{
+    "plan_id":"Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $SUBSCRIBER_ID 
+
+
+// Subscriber: Creat a subscripton when enough deposit -- SUCCESS (sub_id:koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T)
 near call $CONTRACT_ADDR create_subscription '{
     "plan_id":"Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
   }' --accountId $SUBSCRIBER_ID 
@@ -53,6 +75,15 @@ near call $CONTRACT_ADDR create_subscription '{
 
 // Subscriber: multiple subscription to different plans
 
+// Subscriber: calculate subscription cost -- SUCCESS
+near call $CONTRACT_ADDR calcuate_subscription_incurred_cost '{
+    "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  }' --accountId $SUBSCRIBER_ID 
+
+//Subscriber: cancel subscription & fee stop change-- SUCCEEDED
+near call $CONTRACT_ADDR cancel_subscription '{
+    "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  }' --accountId $SUBSCRIBER_ID 
 
 
 
