@@ -51,6 +51,11 @@ near call $CONTRACT_ADDR get_subscription '{
   "subscription_id": "koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
   }' --accountId $SUBSCRIBER_ID
 
+//Contract: get all subscritions from a user -- SUCCEEDED
+near call $CONTRACT_ADDR list_subscriptions_by_subscriber '{
+  "subscriber_id": "'$SUBSCRIBER_ID'"
+  }' --accountId $SERVICE_CONTRACT_OWNER
+
 //Contract: validate a subscription -- SUCCEEDED
 near call $CONTRACT_ADDR validate_subscription '{
   "subscription_id": "koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
@@ -74,7 +79,10 @@ near call $CONTRACT_ADDR create_subscription '{
   }' --accountId $SUBSCRIBER_ID 
 
 
-// Subscriber: withdarw fund
+// Subscriber: withdarw fund -- SUCCEEDED
+near call $CONTRACT_ADDR withdraw '{
+  "amount":100
+  }' --accountId $SUBSCRIBER_ID 
 
 // Subscriber: multiple subscribers to the same plan
 

@@ -632,6 +632,11 @@ impl SubscriberActions for Contract {
             .get(&plan_id)
             .expect("No such plan!");
 
+        assert!(
+            plan.provider_id != env::predecessor_account_id(),
+            "Provider can't subscribe to its own plan!"
+        );
+
         // check validate deposit : deposit should cover at least the 1st paymen
         let valid_deposit = self.get_unlocked_deposit(&subscriber);
         assert!(
