@@ -32,7 +32,7 @@ export default function AccountPage() {
         </div>
         <div className="mx-auto px-4 sm:px-6 md:px-8">
 
-          <dl className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <dl className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
             <div
               className="relative overflow-hidden rounded-lg bg-white px-4 pt-5 pb-12 shadow sm:px-6 sm:pt-6"
             >
@@ -61,14 +61,14 @@ export default function AccountPage() {
             </div>
           </dl>
         </div>
-        <div className="p-8 flex flex-row space-x-8">
+        <div className="px-8 py-16 flex flex-row space-x-8 justify-end">
           <div
-            className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+            className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-6 py-4 text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
           >
             Deposit
           </div>
           <div
-            className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+            className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-6 py-4 text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
           >
             Withdraw
           </div>
