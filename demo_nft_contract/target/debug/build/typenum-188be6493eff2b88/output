@@ -1,2 +1,0 @@
-cargo:rustc-env=TYPENUM_BUILD_CONSTS=/Users/syu/workspace/MetaBuild/recur/demo_nft_contract/target/debug/build/typenum-188be6493eff2b88/out/consts.rs
-cargo:rustc-env=TYPENUM_BUILD_OP=/Users/syu/workspace/MetaBuild/recur/demo_nft_contract/target/debug/build/typenum-188be6493eff2b88/out/op.rs
