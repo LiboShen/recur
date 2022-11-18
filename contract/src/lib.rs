@@ -196,7 +196,13 @@ impl Contract {
 
     // function to return balance in the deposit table.
     // Not all balance is usable as it includes locked fees.
+    // Used soley for debugging purposes. Shouldn't be exposed to user incase of confustion.
     pub fn get_account_balance(&mut self, account: &AccountId) -> u128 {
+        assert!(
+            env::predecessor_account_id() == self.owner,
+            "Only Service Owner can check balance. For users, check get_unlocked_deposit"
+        );
+
         let balance = self
             .deposit_by_account
             .get(&account)
