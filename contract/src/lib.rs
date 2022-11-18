@@ -499,7 +499,6 @@ pub trait ProviderActions {
     fn view_collectable_fees_per_provider(
         &self,
         account: AccountId,
-        charge_ts: Option<u64>,
     ) -> u128;
 }
 
@@ -678,6 +677,7 @@ impl ProviderActions for Contract {
     }
 
     // viewing function to get the total collectable fees of a plan without actuall collecting
+    // implementation is similar to collect_fees
     fn view_collectable_fees_per_plan(&self, plan_id: SubscriptionPlanID) -> u128 {
 
         let plan = self
@@ -710,13 +710,18 @@ impl ProviderActions for Contract {
         return total_fees;
     }
 
-    // view function to get collectable fee of a provider
+    // helper function to get total collectable fee of a provider
     fn view_collectable_fees_per_provider(
         &self,
         account: AccountId,
-        charge_ts: Option<u64>,
     ) -> u128 {
-        todo!()
+
+        let total_fee:u128 = 0;
+        let ids_plans_result  = self.list_plans_by_provider(account);
+        for (plan_id, _) in ids_plans_result.iter(){
+            total_fee += self.view_collectable_fees_per_plan(plan_id.to_string());
+        }
+        return total_fee
     }
 }
 
