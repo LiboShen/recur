@@ -215,8 +215,8 @@ impl Contract {
     // Used soley for debugging purposes. Shouldn't be exposed to user in case of confustion.
     pub fn get_account_balance(&self, account: &AccountId) -> u128 {
         assert!(
-            plan.owner == env::predecessor_account_id()
-            env::predecessor_account_id() == self.owner,
+            env::predecessor_account_id() == self.owner||
+            env::predecessor_account_id() == account.clone(),
             "Only Service Owner or User herself can check balance. For users, check get_withdrawable_deposit"
         );
 
