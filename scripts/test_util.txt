@@ -176,4 +176,182 @@ near call $CONTRACT_ADDR get_available_fund_for_subscription '{
 
 /* multiple subscriptions from different plans 
 ( multiple subscribers & Multiple Providers )
+*///deplyed to dev-1668677946314-54468871935084 ty_dev.testnet
+// crypto_ty.testnet: subscriber
+// ty_dev_2.
+
+yarn deploy
+
+export SERVICE_CONTRACT_OWNER=ty_dev.testnet
+export SUBSCRIBER_ID=crypto_ty.testnet
+export SUBSCRIBER_ID_2=ty_dev_3.testnet
+export PROVIDER_ID=ty_dev_2.testnet
+export CONTRACT_ADDR=dev-1668677946314-54468871935084
+
+plan_id_1 = Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8
+sub_id_1 = "koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+
+
+/* Singler Subscriber & Single Provider*/
+// initialise a contract
+near call dev-1668677946314-54468871935084 new '{"owner_id": "'$SERVICE_CONTRACT_OWNER'"}' --accountId $SERVICE_CONTRACT_OWNER
+
+// Provider: Test Create a Plan -- SUCCEEDED plan-id:Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8
+near call $CONTRACT_ADDR create_subscription_plan '{
+    "provider_id":"'$PROVIDER_ID'",
+    "payment_cycle_length":60,
+    "payment_cycle_rate":1,
+    "payment_cycle_count":5,
+    "plan_name":"test_plan_1"
+  }' --accountId $PROVIDER_ID
+
+
+// Provider: check collectable fees - TODO
+
+// Provider: collect fees -- FAILED
+near call $CONTRACT_ADDR collect_fees '{
+  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $PROVIDER_ID
+
+
+// Contract: View existing plan -- SUCCEEDED
+near call $CONTRACT_ADDR get_plan '{
+  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $PROVIDER_ID
+
+// Contract: View subscription of a plan
+near call $CONTRACT_ADDR list_subscriptions_by_plan_id '{
+  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $SERVICE_CONTRACT_OWNER
+
+// Contract: get deposit of a user -- SUCCEEDED
+near call $CONTRACT_ADDR get_unlocked_deposit '{
+  "account": "'$SUBSCRIBER_ID'"
+  }' --accountId $SUBSCRIBER_ID
+
+// Contract: get total fund of a user -- SUCCEEDED
+near call $CONTRACT_ADDR get_account_balance '{
+  "account": "'$SUBSCRIBER_ID'"
+  }' --accountId $SUBSCRIBER_ID
+
+//Contract: cancel subscription & panic -- SUCCEEDED
+near call $CONTRACT_ADDR cancel_subscription '{
+    "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  }' --accountId $CONTRACT_ADDR 
+
+//Contract: get a subscription -- SUCCEEDED
+near call $CONTRACT_ADDR get_subscription '{
+  "subscription_id": "koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  }' --accountId $SUBSCRIBER_ID
+
+//Contract: get all subscriptions from a user -- SUCCEEDED
+near call $CONTRACT_ADDR list_subscriptions_by_subscriber '{
+  "subscriber_id": "'$SUBSCRIBER_ID'"
+  }' --accountId $SERVICE_CONTRACT_OWNER
+
+//Contract: validate a subscription -- SUCCEEDED
+near call $CONTRACT_ADDR validate_subscription '{
+  "subscription_id": "koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  }' --accountId $SERVICE_CONTRACT_OWNER
+
+// Contract: check total fee for a subscriber -- SUCCEEDED
+// total fees should equal to (account_balance - un_locked_deposit) -- SUCCEEDED
+near call $CONTRACT_ADDR calculate_total_fees_for_subscriber '{
+    "subscriber_id":"'$SUBSCRIBER_ID'"
+  }' --accountId $SUBSCRIBER_ID 
+
+
+// Subscriber: deposit -- SUCCEEDED
+near call $CONTRACT_ADDR deposit '{
+  "subscriber_id": "'$SUBSCRIBER_ID_2'"
+  }' --accountId $SUBSCRIBER_ID --depositYocto 100000000000000000000000
+
+
+// Subscriber: Creat a subscripton & Panic if not enough subscription -- SUCCEEDED
+near call $CONTRACT_ADDR create_subscription '{
+    "plan_id":"Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $SUBSCRIBER_ID 
+
+
+// Subscriber: Creat a subscripton when enough deposit -- SUCCEEDED (sub_id:koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T)
+near call $CONTRACT_ADDR create_subscription '{
+    "plan_id":"Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $SUBSCRIBER_ID 
+
+
+// Subscriber: withdarw fund -- SUCCEEDED
+near call $CONTRACT_ADDR withdraw '{
+  "amount":100
+  }' --accountId $SUBSCRIBER_ID 
+
+near call $CONTRACT_ADDR withdraw '{
+  }' --accountId $SUBSCRIBER_ID 
+
+// Subscriber: calculate subscription cost -- SUCCEEDED
+near call $CONTRACT_ADDR calcuate_subscription_incurred_cost '{
+    "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  }' --accountId $SUBSCRIBER_ID 
+
+//Subscriber: cancel subscription & fee stop change-- SUCCEEDED
+near call $CONTRACT_ADDR cancel_subscription '{
+    "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  }' --accountId $SUBSCRIBER_ID 
+
+// Contract: check total fee for a subscriber -- Succeed
+near call $CONTRACT_ADDR calculate_total_fees_for_subscriber '{
+    "subscriber_id":"'$SUBSCRIBER_ID'"
+  }' --accountId $SUBSCRIBER_ID 
+
+
+near call $CONTRACT_ADDR get_available_fund_for_subscription '{
+    "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  }' --accountId $SUBSCRIBER_ID 
+
+
+/* multiple subscribers & Single Provider */
+
+// create two subscriptions from the same plan -- SUCCEEDED
+// sub_id_1: koFB4hKzwutqExxe7d2MzG63wUYJvVpbs7zf6aGQgapMPYmYB
+// sub_id_2: Cd4f7hz2AU9SAHHyKGpmYGVix9nN3C9HUJxjU9vNMUbLm7nX
+near call $CONTRACT_ADDR create_subscription '{
+    "plan_id":"Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $SUBSCRIBER_ID 
+
+near call $CONTRACT_ADDR create_subscription '{
+    "plan_id":"Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $SUBSCRIBER_ID_2 
+
+near call $CONTRACT_ADDR list_subscriptions_by_plan_id '{
+  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $SERVICE_CONTRACT_OWNER
+
+near call $CONTRACT_ADDR calcuate_subscription_incurred_cost '{
+    "subscription_id":"Cd4f7hz2AU9SAHHyKGpmYGVix9nN3C9HUJxjU9vNMUbLm7nX"
+  }' --accountId $SUBSCRIBER_ID 
+
+near call $CONTRACT_ADDR collect_fees '{
+  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  }' --accountId $PROVIDER_ID
+
+// cancel subscription -- SUCCEEDED
+near call $CONTRACT_ADDR cancel_subscription '{
+    "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvVpbs7zf6aGQgapMPYmYB"
+  }' --accountId $PROVIDER_ID 
+
+
+near call $CONTRACT_ADDR validate_subscription '{
+  "subscription_id": "Cd4f7hz2AU9SAHHyKGpmYGVix9nN3C9HUJxjU9vNMUbLm7nX"
+  }' --accountId $SERVICE_CONTRACT_OWNER
+
+// for active subscription. unplock deposit should be decreasing
+near call $CONTRACT_ADDR get_unlocked_deposit '{
+  "account": "'$SUBSCRIBER_ID'"
+  }' --accountId $SUBSCRIBER_ID
+
+near call $CONTRACT_ADDR get_available_fund_for_subscription '{
+    "subscription_id":"Cd4f7hz2AU9SAHHyKGpmYGVix9nN3C9HUJxjU9vNMUbLm7nX"
+  }' --accountId $SUBSCRIBER_ID 
+
+/* multiple subscriptions from different plans 
+( multiple subscribers & Multiple Providers )
 */
