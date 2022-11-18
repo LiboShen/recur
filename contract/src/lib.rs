@@ -1,7 +1,7 @@
 // TODO: Beneficier
 // TODO: NFT contract
 // TODO: Support Multi FTs
-// TODO: Revist if we need a state for user. E.g. if a user has unsettled payment, 
+// TODO: Revist if we need a state for user. E.g. if a user has unsettled payment,
 //       he should not be allowed to create new subscriptions
 
 use near_contract_standards::non_fungible_token::hash_account_id;
@@ -10,7 +10,8 @@ use near_sdk::bs58;
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::serde::Serialize;
 use near_sdk::{
-    env, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault, Promise,
+    env, log, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault,
+    Promise,
 };
 
 use std::cmp::max;
@@ -115,6 +116,15 @@ impl Contract {
         return plan;
     }
 
+    pub fn get_subscription(&mut self, subscription_id: SubscriptionID) -> Subscription {
+        let sub = self
+            .subscription_by_id
+            .get(&subscription_id)
+            .expect("No such subscription!");
+
+        return sub;
+    }
+
     // get all subscriptions of a given plan
     pub fn list_subscriptions_by_plan_id(
         &mut self,
@@ -130,6 +140,32 @@ impl Contract {
         return results;
     }
 
+    // get all subscriptions of a user
+    pub fn list_subscriptions_by_subscriber(
+        &mut self,
+        subscriber_id: AccountId,
+    ) -> Vec<(SubscriptionID, Subscription)> {
+        let mut results: Vec<(SubscriptionID, Subscription)> = vec![];
+
+        let ids = self
+            .subscriptions_per_subscriber
+            .get(&subscriber_id)
+            .unwrap();
+        for id in ids.iter() {
+            let sub = self.subscription_by_id.get(&id).unwrap();
+            results.push((id, sub));
+        }
+        return results;
+    }
+
+    // return all plans for a provider
+    pub fn list_plans_by_provider(
+        &mut self,
+        account: &AccountId,
+    ) -> Vec<(SubscriptionPlanID, SubscriptionPlan)> {
+        todo!()
+    }
+
     // check if a subscriber has enough funds
     // this can be used by providers to decide if service should be suspended
     pub fn validate_subscription(
@@ -140,14 +176,14 @@ impl Contract {
         //check deposit
         //check currrent cost
         //compare
-        // TODO(Steven): inspect the handling of different subscription state. 
+        // TODO(Steven): inspect the handling of different subscription state.
 
         let subscription = self
-        .subscription_by_id
-        .get(subscription_id)
-        .expect("No such subscription!");
-        
-        // TODO: inspect and fix duplicate cost calcuations 
+            .subscription_by_id
+            .get(subscription_id)
+            .expect("No such subscription!");
+
+        // TODO: inspect and fix duplicate cost calcuations
         let deposit = self.get_unlocked_deposit(&subscription.subscriber_id);
         let cost = self.calcuate_subscription_incurred_cost(subscription_id, charge_ts);
 
@@ -164,6 +200,23 @@ impl Contract {
         let total_fees = self.calculate_total_fees_for_subscriber(account);
 
         return max(0, balance - total_fees);
+    }
+
+    // function to return balance in the deposit table.
+    // Not all balance is usable as it includes locked fees.
+    // Used soley for debugging purposes. Shouldn't be exposed to user incase of confustion.
+    pub fn get_account_balance(&mut self, account: &AccountId) -> u128 {
+        assert!(
+            env::predecessor_account_id() == self.owner,
+            "Only Service Owner can check balance. For users, check get_unlocked_deposit"
+        );
+
+        let balance = self
+            .deposit_by_account
+            .get(&account)
+            .expect("The account has no deposit!");
+
+        return balance;
     }
 
     // Core function to calculate the cost of one subscription. This should cover all subscription states.
@@ -237,10 +290,11 @@ impl Contract {
         //2. accumulate fees from all subscriptions
 
         let mut total_fees: u128 = 0;
+
         let subscription_ids = self
             .subscriptions_per_subscriber
             .get(&subscriber_id)
-            .expect("No subscriptions to charge!");
+            .unwrap_or(UnorderedSet::new(b"s"));
 
         for subscription_id in subscription_ids.iter() {
             total_fees += self.calcuate_subscription_incurred_cost(&subscription_id, None);
@@ -290,7 +344,10 @@ impl Contract {
                     .insert(subscription_id, &subscription);
             }
             SubscriptionState::Canceled { ts: _ } => {
-                env::panic_str("Only Active Subsription can be canceled")
+                log!(
+                    "Subsription has already been canceled. No action. subscription_id: {}",
+                    &subscription_id
+                )
             }
             SubscriptionState::Invalid => env::panic_str("Only Active Subsription can be canceled"),
         }
@@ -336,7 +393,7 @@ impl Contract {
         return due_ts;
     }
 
-    fn get_available_fund_for_subscription(
+    pub fn get_available_fund_for_subscription(
         &mut self,
         subscription_id: &SubscriptionID,
     ) -> (u128, u128) {
@@ -400,7 +457,6 @@ impl Contract {
 
         // if no sub result is returned, there must be error in finding target sub's fund.
         env::panic_str("Sorted subscriptions result is empty");
-
     }
 }
 
@@ -532,6 +588,12 @@ impl ProviderActions for Contract {
             .get(&plan_id)
             .expect("No such plan!");
 
+        assert!(
+            plan.provider_id == env::predecessor_account_id()
+                || self.owner == env::predecessor_account_id(),
+            "Only the Provider or Service owner can collect fees for the provider"
+        );
+
         let subscription_ids = self
             .subscription_ids_by_plan_id
             .get(&plan_id)
@@ -550,7 +612,7 @@ impl ProviderActions for Contract {
                 continue;
             }
 
-            // 2.2 get the available fund for this subsciption and incurred fees
+            // 2.2 get the available fund for this subscription and incurred fees
             let (available_fund, incurred_fees) =
                 self.get_available_fund_for_subscription(&subscription_id);
 
@@ -558,9 +620,9 @@ impl ProviderActions for Contract {
                 // cancel the subscription if the fund is not enough.
                 // charge will still be taken in the following steps
                 self.cancel_subscription(&subscription_id);
-                
+
                 // TODO: Revisit if whe should immediately invalidate the subscription when fund becomes insufficient.
-                // Reasoning: if someone missed a payment before, they shouldn't be served even within this cycle. 
+                // Reasoning: if someone missed a payment before, they shouldn't be served even within this cycle.
                 // But to make the logic fair, we also need to avoid partial payment
             }
 
@@ -605,6 +667,11 @@ impl SubscriberActions for Contract {
             .subscription_plan_by_id
             .get(&plan_id)
             .expect("No such plan!");
+
+        assert!(
+            plan.provider_id != env::predecessor_account_id(),
+            "Provider can't subscribe to its own plan!"
+        );
 
         // check validate deposit : deposit should cover at least the 1st paymen
         let valid_deposit = self.get_unlocked_deposit(&subscriber);
