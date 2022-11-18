@@ -158,6 +158,14 @@ impl Contract {
         return results;
     }
 
+    // return all plans for a provider
+    pub fn list_plans_by_provider(
+        &mut self,
+        account: &AccountId,
+    ) -> Vec<(SubscriptionPlanID, SubscriptionPlan)> {
+        todo!()
+    }
+
     // check if a subscriber has enough funds
     // this can be used by providers to decide if service should be suspended
     pub fn validate_subscription(
@@ -282,15 +290,16 @@ impl Contract {
         //2. accumulate fees from all subscriptions
 
         let mut total_fees: u128 = 0;
-        let subscriptions_ids_check = self.subscriptions_per_subscriber.get(&subscriber_id);
-        if let Some(subscription_ids) = subscriptions_ids_check {
-            for subscription_id in subscription_ids.iter() {
-                total_fees += self.calcuate_subscription_incurred_cost(&subscription_id, None);
-            }
-        } else {
-            // fee is 0 when no subscriptions exist.
-            return 0;
+
+        let subscription_ids = self
+            .subscriptions_per_subscriber
+            .get(&subscriber_id)
+            .unwrap_or(UnorderedSet::new(b"s"));
+
+        for subscription_id in subscription_ids.iter() {
+            total_fees += self.calcuate_subscription_incurred_cost(&subscription_id, None);
         }
+
         return total_fees;
     }
 
