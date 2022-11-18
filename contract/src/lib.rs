@@ -8,7 +8,7 @@ use near_contract_standards::non_fungible_token::hash_account_id;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::bs58;
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
-use near_sdk::json_types::{U128, U64};
+use near_sdk::json_types::U128;
 use near_sdk::serde::Serialize;
 use near_sdk::{
     env, log, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault,
