@@ -126,7 +126,6 @@ impl Contract {
     }
 
     // get all subscriptions of a given plan
-    // TODO: results can be a None. Return an option
     pub fn list_subscriptions_by_plan_id(
         &mut self,
         plan_id: SubscriptionPlanID,
@@ -141,12 +140,6 @@ impl Contract {
         return results;
     }
 
-<<<<<<< HEAD
-    // function to return the deposit of an account
-    pub fn get_deposit(&mut self, account_id: &AccountId) -> u128{
-        todo!()
-    }
-=======
     // get all subscriptions of a user
     pub fn list_subscriptions_by_subscriber(
         &mut self,
@@ -173,7 +166,6 @@ impl Contract {
         todo!()
     }
 
->>>>>>> 59cfe1a47d6b71332459248cb5315f315ff484ec
     // check if a subscriber has enough funds
     // this can be used by providers to decide if service should be suspended
     pub fn validate_subscription(
@@ -192,14 +184,15 @@ impl Contract {
             .expect("No such subscription!");
 
         // TODO: inspect and fix duplicate cost calcuations
-        let deposit = self.get_unlocked_deposit(&subscription.subscriber_id);
+        let deposit = self.get_withdrawable_deposit(&subscription.subscriber_id);
         let cost = self.calcuate_subscription_incurred_cost(subscription_id, charge_ts);
 
         return deposit >= cost;
     }
 
-    // check the depost after removing incurred fees
-    pub fn get_unlocked_deposit(&mut self, account: &AccountId) -> u128 {
+    // viewing function. The withdrawble amount is a dynamic value and updates in real time.
+    // Take this into consideration when showing in the UI to avoid confusion.
+    pub fn get_withdrawable_deposit(&self, account: &AccountId) -> u128 {
         let balance = self
             .deposit_by_account
             .get(&account)
@@ -212,11 +205,12 @@ impl Contract {
 
     // function to return balance in the deposit table.
     // Not all balance is usable as it includes locked fees.
-    // Used soley for debugging purposes. Shouldn't be exposed to user incase of confustion.
-    pub fn get_account_balance(&mut self, account: &AccountId) -> u128 {
+    // Used soley for debugging purposes. Shouldn't be exposed to user in case of confustion.
+    pub fn get_account_balance(&self, account: &AccountId) -> u128 {
         assert!(
+            plan.owner == env::predecessor_account_id()
             env::predecessor_account_id() == self.owner,
-            "Only Service Owner can check balance. For users, check get_unlocked_deposit"
+            "Only Service Owner or User herself can check balance. For users, check get_withdrawable_deposit"
         );
 
         let balance = self
@@ -487,6 +481,19 @@ pub trait ProviderActions {
         plan_id: SubscriptionPlanID,
         charge_ts: Option<u64>,
     ) -> Vec<(SubscriptionID, u128)>;
+
+    // viewing function to get collectable fee of a plan
+    fn view_collectable_fees_per_plan(
+        &self,
+        plan_id: SubscriptionPlanID,
+    ) -> u128;
+
+    // view function to get collectable fee of a provider
+    fn view_collectable_fees_per_provider(
+        &self,
+        account: AccountId,
+        charge_ts: Option<u64>,
+    ) -> u128;
 }
 
 pub trait SubscriberActions {
@@ -662,6 +669,49 @@ impl ProviderActions for Contract {
 
         return result;
     }
+
+    // viewing function to get the total collectable fees of a plan without actuall collecting
+    fn view_collectable_fees_per_plan(&self, plan_id: SubscriptionPlanID) -> u128 {
+        let charge_ts = env::block_timestamp();
+
+        let plan = self
+            .subscription_plan_by_id
+            .get(&plan_id)
+            .expect("No such plan!");
+
+        let subscription_ids = self
+            .subscription_ids_by_plan_id
+            .get(&plan_id)
+            .map_or(vec![], |x| UnorderedSet::to_vec(&x));
+
+        let mut total_fees: u128 = 0;
+
+        for subscription_id in subscription_ids.iter() {
+            let mut subscription = self.subscription_by_id.get(&subscription_id).unwrap();
+
+            // if subscription is Invalid, no fees, skip
+            if let SubscriptionState::Invalid = subscription.state {
+                continue;
+            }
+
+            // get the available fund for this subscription and incurred fees
+            let (available_fund, incurred_fees) =
+                self.get_available_fund_for_subscription(&subscription_id);
+
+            total_fees += min(available_fund, incurred_fees);
+        }
+
+        return total_fees;
+    }
+
+    // view function to get collectable fee of a provider
+    fn view_collectable_fees_per_provider(
+        &self,
+        account: AccountId,
+        charge_ts: Option<u64>,
+    ) -> u128 {
+        todo!()
+    }
 }
 
 #[near_bindgen]
@@ -682,7 +732,7 @@ impl SubscriberActions for Contract {
         );
 
         // check validate deposit : deposit should cover at least the 1st paymen
-        let valid_deposit = self.get_unlocked_deposit(&subscriber);
+        let valid_deposit = self.get_withdrawable_deposit(&subscriber);
         assert!(
             valid_deposit >= plan.payment_cycle_rate,
             "Deposit is not enough for first payment {rate}",
@@ -782,7 +832,7 @@ impl SubscriberActions for Contract {
 
         let user_id = env::predecessor_account_id();
 
-        let withdrawable_fund = self.get_unlocked_deposit(&user_id);
+        let withdrawable_fund = self.get_withdrawable_deposit(&user_id);
 
         // if no input amount is given, withdarw all available fund
         let asking_amount = amount.unwrap_or(withdrawable_fund);
