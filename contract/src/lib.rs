@@ -619,7 +619,7 @@ impl ProviderActions for Contract {
         let subscription_ids = self
             .subscription_ids_by_plan_id
             .get(&plan_id)
-            .expect("No existing subscriptions!");
+            .map_or(vec![], |x| UnorderedSet::to_vec(&x));
 
         // prepare result
         let mut total_fees: u128 = 0;
@@ -630,7 +630,7 @@ impl ProviderActions for Contract {
 
             // 2.1 if subscription is Invalid, no fees, skip
             if let SubscriptionState::Invalid = subscription.state {
-                result.push((subscription_id, 0));
+                result.push((subscription_id.to_string(), 0));
                 continue;
             }
 
@@ -660,7 +660,7 @@ impl ProviderActions for Contract {
                     subscription.state = SubscriptionState::Invalid;
                     self.subscription_by_id
                         .insert(&subscription_id, &subscription);
-                    result.push((subscription_id, 0));
+                    result.push((subscription_id.to_string(), 0));
                     continue;
                 }
             }
@@ -668,7 +668,7 @@ impl ProviderActions for Contract {
             subscription.prev_charge_ts = env::block_timestamp();
             self.subscription_by_id
                 .insert(&subscription_id, &subscription);
-            result.push((subscription_id, internal_charge_amount));
+            result.push((subscription_id.to_string(), internal_charge_amount));
         }
 
         //3. transfer the total fee to provider
@@ -679,7 +679,6 @@ impl ProviderActions for Contract {
 
     // viewing function to get the total collectable fees of a plan without actuall collecting
     fn view_collectable_fees_per_plan(&self, plan_id: SubscriptionPlanID) -> u128 {
-        let charge_ts = env::block_timestamp();
 
         let plan = self
             .subscription_plan_by_id
