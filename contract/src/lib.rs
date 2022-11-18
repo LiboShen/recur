@@ -403,7 +403,7 @@ impl Contract {
     }
 
     pub fn get_available_fund_for_subscription(
-        &mut self,
+        &self,
         subscription_id: &SubscriptionID,
     ) -> (u128, u128) {
         /* Core helper function to check available fund for one subscription
@@ -680,11 +680,6 @@ impl ProviderActions for Contract {
     // implementation is similar to collect_fees
     fn view_collectable_fees_per_plan(&self, plan_id: SubscriptionPlanID) -> u128 {
 
-        let plan = self
-            .subscription_plan_by_id
-            .get(&plan_id)
-            .expect("No such plan!");
-
         let subscription_ids = self
             .subscription_ids_by_plan_id
             .get(&plan_id)
@@ -693,7 +688,7 @@ impl ProviderActions for Contract {
         let mut total_fees: u128 = 0;
 
         for subscription_id in subscription_ids.iter() {
-            let mut subscription = self.subscription_by_id.get(&subscription_id).unwrap();
+            let subscription = self.subscription_by_id.get(&subscription_id).unwrap();
 
             // if subscription is Invalid, no fees, skip
             if let SubscriptionState::Invalid = subscription.state {
@@ -716,7 +711,7 @@ impl ProviderActions for Contract {
         account: AccountId,
     ) -> u128 {
 
-        let total_fee:u128 = 0;
+        let mut total_fee:u128 = 0;
         let ids_plans_result  = self.list_plans_by_provider(account);
         for (plan_id, _) in ids_plans_result.iter(){
             total_fee += self.view_collectable_fees_per_plan(plan_id.to_string());
