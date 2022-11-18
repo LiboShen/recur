@@ -8,6 +8,7 @@ use near_contract_standards::non_fungible_token::hash_account_id;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::bs58;
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
+use near_sdk::json_types::U128;
 use near_sdk::serde::Serialize;
 use near_sdk::{
     env, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault, Promise,
@@ -472,7 +473,7 @@ pub trait ProviderActions {
         &mut self,
         provider_id: Option<AccountId>, // if none, use the caller accountid
         payment_cycle_length: u64,
-        payment_cycle_rate: u128,
+        payment_cycle_rate: U128,
         payment_cycle_count: u64,
         plan_name: Option<String>,
         //prev_charge_ts: Option<u64>,
@@ -487,16 +488,10 @@ pub trait ProviderActions {
     ) -> Vec<(SubscriptionID, u128)>;
 
     // viewing function to get collectable fee of a plan
-    fn view_collectable_fees_per_plan(
-        &self,
-        plan_id: SubscriptionPlanID,
-    ) -> u128;
+    fn view_collectable_fees_per_plan(&self, plan_id: SubscriptionPlanID) -> u128;
 
     // view function to get collectable fee of a provider
-    fn view_collectable_fees_per_provider(
-        &self,
-        account: AccountId,
-    ) -> u128;
+    fn view_collectable_fees_per_provider(&self, account: AccountId) -> u128;
 }
 
 pub trait SubscriberActions {
@@ -515,7 +510,7 @@ impl ProviderActions for Contract {
         &mut self,
         provider_id: Option<AccountId>, // if none, use the sending account id
         payment_cycle_length: u64,
-        payment_cycle_rate: u128,
+        payment_cycle_rate: U128,
         payment_cycle_count: u64,
         plan_name: Option<String>,
         //prev_charge_ts: Option<u64>,
@@ -526,6 +521,8 @@ impl ProviderActions for Contract {
             .map(|a| a.into())
             // if no provider id is given, simply use the caller's ID
             .unwrap_or_else(env::predecessor_account_id);
+
+        let payment_cycle_rate = payment_cycle_rate.0;
 
         assert!(
             payment_cycle_length >= 60,
@@ -670,7 +667,6 @@ impl ProviderActions for Contract {
     // viewing function to get the total collectable fees of a plan without actuall collecting
     // implementation is similar to collect_fees
     fn view_collectable_fees_per_plan(&self, plan_id: SubscriptionPlanID) -> u128 {
-
         let subscription_ids = self
             .subscription_ids_by_plan_id
             .get(&plan_id)
@@ -697,17 +693,13 @@ impl ProviderActions for Contract {
     }
 
     // helper function to get total collectable fee of a provider
-    fn view_collectable_fees_per_provider(
-        &self,
-        account: AccountId,
-    ) -> u128 {
-
-        let mut total_fee:u128 = 0;
-        let ids_plans_result  = self.list_plans_by_provider(account);
-        for (plan_id, _) in ids_plans_result.iter(){
+    fn view_collectable_fees_per_provider(&self, account: AccountId) -> u128 {
+        let mut total_fee: u128 = 0;
+        let ids_plans_result = self.list_plans_by_provider(account);
+        for (plan_id, _) in ids_plans_result.iter() {
             total_fee += self.view_collectable_fees_per_plan(plan_id.to_string());
         }
-        return total_fee
+        return total_fee;
     }
 }
 
