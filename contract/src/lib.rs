@@ -108,7 +108,7 @@ impl Contract {
         this
     }
 
-    pub fn get_plan(&mut self, plan_id: SubscriptionPlanID) -> SubscriptionPlan {
+    pub fn get_plan(&self, plan_id: SubscriptionPlanID) -> SubscriptionPlan {
         let plan = self
             .subscription_plan_by_id
             .get(&plan_id)
@@ -116,7 +116,7 @@ impl Contract {
         return plan;
     }
 
-    pub fn get_subscription(&mut self, subscription_id: SubscriptionID) -> Subscription {
+    pub fn get_subscription(&self, subscription_id: SubscriptionID) -> Subscription {
         let sub = self
             .subscription_by_id
             .get(&subscription_id)
@@ -127,7 +127,7 @@ impl Contract {
 
     // get all subscriptions of a given plan
     pub fn list_subscriptions_by_plan_id(
-        &mut self,
+        &self,
         plan_id: SubscriptionPlanID,
     ) -> Vec<(SubscriptionID, Subscription)> {
         let mut results: Vec<(SubscriptionID, Subscription)> = vec![];
@@ -142,7 +142,7 @@ impl Contract {
 
     // get all subscriptions of a user
     pub fn list_subscriptions_by_subscriber(
-        &mut self,
+        &self,
         subscriber_id: AccountId,
     ) -> Vec<(SubscriptionID, Subscription)> {
         let mut results: Vec<(SubscriptionID, Subscription)> = vec![];
@@ -150,26 +150,33 @@ impl Contract {
         let ids = self
             .subscriptions_per_subscriber
             .get(&subscriber_id)
-            .unwrap();
+            .map_or(vec![], |x| UnorderedSet::to_vec(&x));
         for id in ids.iter() {
             let sub = self.subscription_by_id.get(&id).unwrap();
-            results.push((id, sub));
+            results.push((id.to_string(), sub));
         }
         return results;
     }
 
-    // return all plans for a provider
+    // Returns all plans for a provider
     pub fn list_plans_by_provider(
-        &mut self,
-        account: &AccountId,
+        &self,
+        provider_id: AccountId,
     ) -> Vec<(SubscriptionPlanID, SubscriptionPlan)> {
-        todo!()
+        let mut results: Vec<(SubscriptionPlanID, SubscriptionPlan)> = vec![];
+
+        for (id, plan) in self.subscription_plan_by_id.iter() {
+            if plan.provider_id == provider_id {
+                results.push((id, plan));
+            }
+        }
+        return results;
     }
 
     // check if a subscriber has enough funds
     // this can be used by providers to decide if service should be suspended
     pub fn validate_subscription(
-        &mut self,
+        &self,
         subscription_id: &SubscriptionID,
         charge_ts: Option<u64>,
     ) -> bool {
@@ -191,7 +198,7 @@ impl Contract {
     }
 
     // check the depost after removing incurred fees
-    pub fn get_unlocked_deposit(&mut self, account: &AccountId) -> u128 {
+    pub fn get_unlocked_deposit(&self, account: &AccountId) -> u128 {
         let balance = self
             .deposit_by_account
             .get(&account)
@@ -221,7 +228,7 @@ impl Contract {
 
     // Core function to calculate the cost of one subscription. This should cover all subscription states.
     pub fn calcuate_subscription_incurred_cost(
-        &mut self,
+        &self,
         subscription_id: &SubscriptionID,
         end_ts: Option<u64>,
     ) -> u128 {
@@ -285,7 +292,7 @@ impl Contract {
 
     // function to calcuate all subscriptions cost for a subscriber
     // This function will be used when calculating withdraw amount of a subscriber
-    pub fn calculate_total_fees_for_subscriber(&mut self, subscriber_id: &AccountId) -> u128 {
+    pub fn calculate_total_fees_for_subscriber(&self, subscriber_id: &AccountId) -> u128 {
         //1. get all subscritons of one user
         //2. accumulate fees from all subscriptions
 
