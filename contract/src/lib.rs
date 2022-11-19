@@ -201,14 +201,16 @@ impl Contract {
     // viewing function. The withdrawble amount is a dynamic value and updates in real time.
     // Take this into consideration when showing in the UI to avoid confusion.
     pub fn get_withdrawable_deposit(&self, account: &AccountId) -> u128 {
-        let balance = self
-            .deposit_by_account
-            .get(&account)
-            .expect("The account has no deposit!");
+        let balance = self.deposit_by_account.get(&account).unwrap_or(0);
 
         let total_fees = self.calculate_total_fees_for_subscriber(account);
 
-        return max(0, balance - total_fees);
+        // Avoid unsigned number overflow
+        if balance > total_fees {
+            balance - total_fees
+        } else {
+            0
+        }
     }
 
     // function to return balance in the deposit table.
