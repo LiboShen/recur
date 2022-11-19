@@ -17,6 +17,8 @@ use near_sdk::{
 use std::cmp::max;
 use std::cmp::min;
 
+const SECONDS_TO_NANO: u64 = 1000000000;
+
 type SubscriptionPlanID = String; // ID for each subscription plan
 type SubscriptionID = String;
 
@@ -272,7 +274,7 @@ impl Contract {
                 // if no charge has been taken before, treat start_ts as one cycle earlier, to achive upfront payment
                 charge_start_ts = max(
                     subscription.prev_charge_ts,
-                    sub_start_ts - &plan.payment_cycle_length,
+                    sub_start_ts - &plan.payment_cycle_length * SECONDS_TO_NANO,
                 );
             }
             SubscriptionState::Canceled { ts: canceled_ts } => {
@@ -288,7 +290,7 @@ impl Contract {
         }
 
         let charge_duration = charge_end_ts - charge_start_ts;
-        let count_payment_cycles = charge_duration / &plan.payment_cycle_length;
+        let count_payment_cycles = charge_duration / &plan.payment_cycle_length / SECONDS_TO_NANO;
 
         let cost = (count_payment_cycles as u128) * &plan.payment_cycle_rate;
 
