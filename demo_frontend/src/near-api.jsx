@@ -4,7 +4,7 @@ import { getConfig } from "./near-config";
 
 export const nearConfig = getConfig(import.meta.env.MODE || "development");
 
-const PLAN_ID = "2et2iTwBw8Qq7AkokTsQdYnN2rkTrow46v59oDwdKtb";
+const PLAN_ID = "2et2iTwBw8Qq7AkokTsQdYnRGimfJhVMETRbadoDShe";
 // Initialize contract & set global variables
 export async function initContract() {
   // Initialize connection to the NEAR testnet
