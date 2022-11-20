@@ -4,6 +4,7 @@ import { getConfig } from "./near-config";
 
 export const nearConfig = getConfig(import.meta.env.MODE || "development");
 
+const PLAN_ID = "2et2iTwBw8Qq7AkokTsQdYnN2rkTrow46v59oDwdKtb";
 // Initialize contract & set global variables
 export async function initContract() {
   // Initialize connection to the NEAR testnet
@@ -26,10 +27,12 @@ export async function initContract() {
     window.walletConnection.account(),
     nearConfig.contractName,
     {
-      viewMethods: ["leases_by_borrower", "leases_by_owner"],
-      changeMethods: ["lending_accept", "claim_back"],
+      viewMethods: ["find_valid_subscription"],
+      changeMethods: [],
     }
   );
+
+  window.isMember = await findValidSubscription(PLAN_ID) !== null;
 }
 
 export function signOutNearWallet() {
@@ -46,36 +49,12 @@ export function signInWithNearWallet() {
   window.walletConnection.requestSignIn(nearConfig.contractName);
 }
 
-export async function myLendings() {
-  let tokens = await window.contract.leases_by_owner({
-    account_id: window.accountId,
+export async function findValidSubscription(planId) {
+  if (!window.accountId) return null;
+  let subId = await window.contract.find_valid_subscription({
+    subscriber_id: window.accountId,
+    plan_id: planId
   });
-  return tokens;
+  return subId;
 }
 
-export async function myBorrowings() {
-  let tokens = await window.contract.leases_by_borrower({
-    account_id: window.accountId,
-  });
-  return tokens;
-}
-
-export async function acceptLease(leaseId, rent) {
-  let response = await window.contract.lending_accept({
-    args: {
-      lease_id: leaseId,
-    },
-    amount: (BigInt(rent) + BigInt(1e18)).toString(),
-  });
-  return response;
-}
-
-export async function claimBack(leaseId) {
-  let response = await window.contract.claim_back({
-    args: {
-      lease_id: leaseId,
-    },
-    amount: 1,
-  });
-  return response;
-}

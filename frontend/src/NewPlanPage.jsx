@@ -1,12 +1,14 @@
 import React from "react";
-import { initContract, nftTokensForOwner, newLease } from "./NftContract";
+import { createPlan } from "./near-api";
+import Modal from "./Modal";
 
 
 const FREQUENCIES = {
-  "Daily": { quantifier: "Day(s)" },
-  "Weekly": { quantifier: "Week(s)" },
-  "Monthly": { quantifier: "Month(s)" },
-  "Annually": { quantifier: "Year(s)" },
+  "Every minute": { quantifier: "Minute(s)", seconds: 60 },
+  "Daily": { quantifier: "Day(s)", seconds: 24 * 3600 },
+  "Weekly": { quantifier: "Week(s)", seconds: 7 * 24 * 3600 },
+  "Monthly": { quantifier: "Month(s)", seconds: 30 * 24 * 3600 },
+  "Annually": { quantifier: "Year(s)", seconds: 365 * 24 * 3600 },
 }
 
 
@@ -14,18 +16,13 @@ const FREQUENCIES = {
 export default function NewLendingPage() {
   const [name, setName] = React.useState("");
   const [frequency, setFrequency] = React.useState("Monthly");
-  const [duration, setDuration] = React.useState(1);
-  const [rate, setRate] = React.useState(0);
+  const [price, setPrice] = React.useState(0);
+  const [success, setSuccess] = React.useState(false)
 
-  // let onSubmit = async () => {
-  //   let contract = await initContract(selectedContract.id);
-  //   let expiration =
-  //     Math.trunc(Date.now() / 1000) +
-  //     durationDay * 24 * 3600 +
-  //     durationHour * 3600 +
-  //     durationMinute * 60;
-  //   newLease(contract, selectedToken.id, borrower, expiration, rent);
-  // };
+  let onSubmit = async () => {
+    let cycleLength = FREQUENCIES[frequency].seconds
+    createPlan(name, cycleLength, price).then(_ => setSuccess(_ => true))
+  };
 
   return (
     <>
@@ -71,27 +68,7 @@ export default function NewLendingPage() {
                   {Object.keys(FREQUENCIES).map((k, i) => <option key={i}>{k}</option>)}
                 </select>
                 <p className="mt-2 text-sm text-gray-500">
-                  Choose the token you want to lend
-                </p>
-              </div>
-            </div>
-
-            <div className="sm:grid sm:grid-cols-3 sm:items-start sm:gap-4 sm:border-t sm:border-gray-200 sm:pt-5">
-              <label className="block text-sm font-medium text-gray-700 sm:mt-px sm:pt-2">
-                Duration
-              </label>
-              <div className="mt-1 sm:col-span-2 sm:mt-0">
-                <div className="flex flex-row items-center space-x-2">
-                  <input
-                    type="text"
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                  />
-                  <span>{FREQUENCIES[frequency].quantifier}</span>
-                </div>
-                <p className="mt-2 text-sm text-gray-500">
-                  The maximum duration of the subscription
+                  The subscription payment frequency
                 </p>
               </div>
             </div>
@@ -105,13 +82,13 @@ export default function NewLendingPage() {
                   <input
                     type="number"
                     className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                    value={rate}
-                    onChange={(e) => setRate(e.target.value)}
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
                   />
                   <span>{frequency}</span>
                 </div>
                 <p className="mt-2 text-sm text-gray-500">
-                  The maximum duration of the subscription
+                  How much the subscriber should pay in cycle (in NEAR)
                 </p>
               </div>
             </div>
@@ -135,6 +112,13 @@ export default function NewLendingPage() {
           </div>
         </div>
       </div>
+      <Modal
+        open={success}
+        setOpen={setSuccess}
+        title="New plan has been created 🎉"
+        description="The new plan is ready for recieving recuring payment!"
+        buttonText="Go back to Plans page"
+        buttonUrl="/plans" />
     </>
   );
 }

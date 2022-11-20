@@ -1,22 +1,6 @@
-/*
-  This example requires some changes to your config:
-
-  ```
-  // tailwind.config.js
-  module.exports = {
-    // ...
-    plugins: [
-      // ...
-      require('@tailwindcss/forms'),
-    ],
-  }
-  ```
-*/
-import { Fragment } from 'react'
-import { Popover, Transition } from '@headlessui/react'
+import React from "react";
 import {
   ArrowUturnLeftIcon,
-  Bars3Icon,
   ChatBubbleBottomCenterTextIcon,
   ChatBubbleLeftEllipsisIcon,
   ChatBubbleLeftRightIcon,
@@ -25,112 +9,13 @@ import {
   InboxIcon,
   PencilSquareIcon,
   QuestionMarkCircleIcon,
-  SparklesIcon,
   TrashIcon,
   UsersIcon,
-  XMarkIcon,
 } from '@heroicons/react/24/outline'
-import { ChevronDownIcon } from '@heroicons/react/20/solid'
+import { signInWithNearWallet } from "./near-api";
 
-const solutions = [
-  {
-    name: 'Inbox',
-    description: 'Get a better understanding of where your traffic is coming from.',
-    href: '#',
-    icon: InboxIcon,
-  },
-  {
-    name: 'Messaging',
-    description: 'Speak directly to your customers in a more meaningful way.',
-    href: '#',
-    icon: ChatBubbleBottomCenterTextIcon,
-  },
-  {
-    name: 'Live Chat',
-    description: "Your customers' data will be safe and secure.",
-    href: '#',
-    icon: ChatBubbleLeftRightIcon,
-  },
-  {
-    name: 'Knowledge Base',
-    description: "Connect with third-party tools that you're already using.",
-    href: '#',
-    icon: QuestionMarkCircleIcon,
-  },
-]
-const features = [
-  {
-    name: 'Unlimited Inboxes',
-    description: 'Ac tincidunt sapien vehicula erat auctor pellentesque rhoncus. Et magna sit morbi lobortis.',
-    icon: InboxIcon,
-  },
-  {
-    name: 'Manage Team Members',
-    description: 'Ac tincidunt sapien vehicula erat auctor pellentesque rhoncus. Et magna sit morbi lobortis.',
-    icon: UsersIcon,
-  },
-  {
-    name: 'Spam Report',
-    description: 'Ac tincidunt sapien vehicula erat auctor pellentesque rhoncus. Et magna sit morbi lobortis.',
-    icon: TrashIcon,
-  },
-  {
-    name: 'Compose in Markdown',
-    description: 'Ac tincidunt sapien vehicula erat auctor pellentesque rhoncus. Et magna sit morbi lobortis.',
-    icon: PencilSquareIcon,
-  },
-  {
-    name: 'Team Reporting',
-    description: 'Ac tincidunt sapien vehicula erat auctor pellentesque rhoncus. Et magna sit morbi lobortis.',
-    icon: DocumentChartBarIcon,
-  },
-  {
-    name: 'Saved Replies',
-    description: 'Ac tincidunt sapien vehicula erat auctor pellentesque rhoncus. Et magna sit morbi lobortis.',
-    icon: ArrowUturnLeftIcon,
-  },
-  {
-    name: 'Email Commenting',
-    description: 'Ac tincidunt sapien vehicula erat auctor pellentesque rhoncus. Et magna sit morbi lobortis.',
-    icon: ChatBubbleLeftEllipsisIcon,
-  },
-  {
-    name: 'Connect with Customers',
-    description: 'Ac tincidunt sapien vehicula erat auctor pellentesque rhoncus. Et magna sit morbi lobortis.',
-    icon: HeartIcon,
-  },
-]
-const metrics = [
-  { id: 1, stat: '8K+', emphasis: 'Companies', rest: 'use laoreet amet lacus nibh integer quis.' },
-  { id: 2, stat: '25K+', emphasis: 'Countries around the globe', rest: 'lacus nibh integer quis.' },
-  { id: 3, stat: '98%', emphasis: 'Customer satisfaction', rest: 'laoreet amet lacus nibh integer quis.' },
-  { id: 4, stat: '12M+', emphasis: 'Issues resolved', rest: 'lacus nibh integer quis.' },
-]
+
 const footerNavigation = {
-  solutions: [
-    { name: 'Marketing', href: '#' },
-    { name: 'Analytics', href: '#' },
-    { name: 'Commerce', href: '#' },
-    { name: 'Insights', href: '#' },
-  ],
-  support: [
-    { name: 'Pricing', href: '#' },
-    { name: 'Documentation', href: '#' },
-    { name: 'Guides', href: '#' },
-    { name: 'API Status', href: '#' },
-  ],
-  company: [
-    { name: 'About', href: '#' },
-    { name: 'Blog', href: '#' },
-    { name: 'Jobs', href: '#' },
-    { name: 'Press', href: '#' },
-    { name: 'Partners', href: '#' },
-  ],
-  legal: [
-    { name: 'Claim', href: '#' },
-    { name: 'Privacy', href: '#' },
-    { name: 'Terms', href: '#' },
-  ],
   social: [
     {
       name: 'Facebook',
@@ -180,24 +65,7 @@ const footerNavigation = {
         </svg>
       ),
     },
-    {
-      name: 'Dribbble',
-      href: '#',
-      icon: (props) => (
-        <svg fill="currentColor" viewBox="0 0 24 24" {...props}>
-          <path
-            fillRule="evenodd"
-            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10c5.51 0 10-4.48 10-10S17.51 2 12 2zm6.605 4.61a8.502 8.502 0 011.93 5.314c-.281-.054-3.101-.629-5.943-.271-.065-.141-.12-.293-.184-.445a25.416 25.416 0 00-.564-1.236c3.145-1.28 4.577-3.124 4.761-3.362zM12 3.475c2.17 0 4.154.813 5.662 2.148-.152.216-1.443 1.941-4.48 3.08-1.399-2.57-2.95-4.675-3.189-5A8.687 8.687 0 0112 3.475zm-3.633.803a53.896 53.896 0 013.167 4.935c-3.992 1.063-7.517 1.04-7.896 1.04a8.581 8.581 0 014.729-5.975zM3.453 12.01v-.26c.37.01 4.512.065 8.775-1.215.25.477.477.965.694 1.453-.109.033-.228.065-.336.098-4.404 1.42-6.747 5.303-6.942 5.629a8.522 8.522 0 01-2.19-5.705zM12 20.547a8.482 8.482 0 01-5.239-1.8c.152-.315 1.888-3.656 6.703-5.337.022-.01.033-.01.054-.022a35.318 35.318 0 011.823 6.475 8.4 8.4 0 01-3.341.684zm4.761-1.465c-.086-.52-.542-3.015-1.659-6.084 2.679-.423 5.022.271 5.314.369a8.468 8.468 0 01-3.655 5.715z"
-            clipRule="evenodd"
-          />
-        </svg>
-      ),
-    },
   ],
-}
-
-function classNames(...classes) {
-  return classes.filter(Boolean).join(' ')
 }
 
 export default function Example() {
@@ -225,12 +93,18 @@ export default function Example() {
                 <p className="mx-auto mt-6 max-w-lg text-center text-xl text-indigo-200 sm:max-w-3xl">
                   Join with handreds of builders to access daily exlusive materials about growing your Web3 business.
                 </p>
-                <div className="mx-auto mt-10 max-w-sm sm:flex sm:max-w-none sm:justify-center">
-                  <a
-                    href="#"
+                <div className="mx-auto mt-10 max-w-sm sm:flex sm:max-w-none sm:justify-center space-x-4">
+                  <button
                     className="flex items-center justify-center rounded-md border border-transparent bg-indigo-500 bg-opacity-60 px-4 py-3 text-base font-medium text-white shadow-sm hover:bg-opacity-70 sm:px-8"
+                    onClick={signInWithNearWallet}
                   >
                     Sign in
+                  </button>
+                  <a
+                    className="flex items-center justify-center rounded-md border border-transparent bg-indigo-500 bg-opacity-60 px-4 py-3 text-base font-medium text-white shadow-sm hover:bg-opacity-70 sm:px-8"
+                    href="posts"
+                  >
+                    See reports
                   </a>
                 </div>
               </div>

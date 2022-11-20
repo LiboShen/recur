@@ -1,48 +1,28 @@
 import React from "react";
-import { initContract, nftTokensForOwner, newLease } from "./NftContract";
+import { getPlan, createSubscription } from "./near-api";
 import { useParams } from "react-router-dom";
-
-
-
-const TEST_PLAN = {
-  name: "Web3 Book Club Membership",
-  frequency: 60,
-  rate: "100000000000000000000",
-  count: 100
-}
-
-function formatDuration(frequency) {
-  if (frequency == 60) {
-    return "1 minute"
-  }
-  if (frequency == 60 * 60) {
-    return "1 hour"
-  }
-  if (frequency == 60 * 60 * 24) {
-    return "1 day"
-  }
-  if (frequency == 60 * 60 * 7) {
-    return " 1week"
-  }
-  if (frequency == 60 * 60 * 30) {
-    return "30 days"
-  }
-  return frequency + " seconds";
-}
-
+import { formatDuration, formatNearAmount } from "./Utils"
+import Modal from "./Modal";
 
 
 export default function ReviewSubscriptionPage() {
   let { planId } = useParams();
 
   const [plan, setPlan] = React.useState(null);
+  const [success, setSuccess] = React.useState(false)
 
   React.useEffect(() => {
     async function fetchPlan() {
-      setPlan((_) => TEST_PLAN)
+      getPlan(planId).then((plan) =>
+        setPlan((_) => plan)
+      );
     }
     fetchPlan();
-  });
+  }, [planId]);
+
+  let onSubmit = async () => {
+    createSubscription(planId).then(_ => setSuccess(_ => true));
+  };
 
   return plan ? (
     <>
@@ -63,7 +43,21 @@ export default function ReviewSubscriptionPage() {
               <div className="mt-1 sm:col-span-2 sm:mt-0">
                 <div
                   className="block w-full "
-                >{plan.name}</div>
+                >{plan.plan_name}</div>
+              </div>
+            </div>
+
+            <div className="sm:grid sm:grid-cols-3 sm:items-start sm:gap-4 sm:border-t sm:border-gray-200 sm:pt-5">
+              <label
+                className="block text-sm font-medium text-gray-700"
+              >
+                Subscription Plan ID
+              </label>
+              <div className="mt-1 sm:col-span-2 sm:mt-0">
+                <pre
+                  className="block w-full text-sm"
+                >{planId}
+                </pre>
               </div>
             </div>
 
@@ -76,25 +70,9 @@ export default function ReviewSubscriptionPage() {
               <div className="mt-1 sm:col-span-2 sm:mt-0">
                 <div
                   className="block w-full "
-                >{window.nearApi.utils.format.formatNearAmount(
-                  BigInt(plan.rate).toString()
-                )} every {formatDuration(plan.frequency)}</div>
+                >{formatNearAmount(plan.payment_cycle_rate)}Ⓝ every {formatDuration(plan.payment_cycle_length)}</div>
               </div>
             </div>
-
-            <div className="sm:grid sm:grid-cols-3 sm:items-start sm:gap-4 sm:border-t sm:border-gray-200 sm:pt-5">
-              <label
-                className="block text-sm font-medium text-gray-700"
-              >
-                Duration
-              </label>
-              <div className="mt-1 sm:col-span-2 sm:mt-0">
-                <div
-                  className="block w-full "
-                >{formatDuration(plan.frequency * plan.count)}</div>
-              </div>
-            </div>
-
           </div>
 
           <div className="pt-5">
@@ -115,5 +93,12 @@ export default function ReviewSubscriptionPage() {
           </div>
         </div>
       </div>
+      <Modal
+        open={success}
+        setOpen={setSuccess}
+        title="Subscription started"
+        description="Your new subscription is active now!"
+        buttonText="Go back to Home page"
+        buttonUrl="/" />
     </>) : "Loading";
 }

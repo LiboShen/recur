@@ -1,9 +1,14 @@
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import { CheckIcon } from '@heroicons/react/24/outline'
+
+const RECUR_HOSTNAME = "http://localhost:5173"
+const PLAN_ID = "2et2iTwBw8Qq7AkokTsQdYnN2rkTrow46v59oDwdKtb"
 
 const tiers = [
   {
     name: 'Basic',
-    href: '#',
+    href: RECUR_HOSTNAME + "/plans/" + PLAN_ID + "/subscribe?redirect_to=" + location.href,
     priceDaily: 1,
     features: [
       'Access to all exclusive research report',
@@ -12,7 +17,7 @@ const tiers = [
   },
   {
     name: 'Pro',
-    href: '#',
+    href: RECUR_HOSTNAME + "/plans/" + PLAN_ID + "/subscribe?redirect_to=" + location.href,
     priceDaily: 3,
     features: [
       'Access to all exclusive research report',
@@ -24,7 +29,13 @@ const tiers = [
 ]
 
 export default function PricingPage() {
-  return (
+  const navigate = useNavigate();
+  React.useEffect(() => {
+    if (window.isMember === true) {
+      navigate("/posts")
+    }
+  }, [window.isMember]);
+  return window.isMember === false ? (
     <div className="bg-gray-900">
       <div className="pt-12 sm:pt-16 lg:pt-24">
         <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
@@ -84,5 +95,5 @@ export default function PricingPage() {
         </div>
       </div>
     </div>
-  )
+  ) : "loading"
 }

@@ -26,8 +26,22 @@ export async function initContract() {
     window.walletConnection.account(),
     nearConfig.contractName,
     {
-      viewMethods: ["leases_by_borrower", "leases_by_owner"],
-      changeMethods: ["lending_accept", "claim_back"],
+      viewMethods: [
+        "get_plan",
+        "list_subscriptions_by_subscriber",
+        "list_plans_by_provider",
+        "get_withdrawable_deposit",
+        "view_collectable_fees_per_plan",
+        "view_collectable_fees_per_provider",
+      ],
+      changeMethods: [
+        "create_subscription_plan",
+        "create_subscription",
+        "collect_fees",
+        "cancel_subscription",
+        "deposit",
+        "withdraw",
+      ],
     }
   );
 }
@@ -46,36 +60,111 @@ export function signInWithNearWallet() {
   window.walletConnection.requestSignIn(nearConfig.contractName);
 }
 
-export async function myLendings() {
-  let tokens = await window.contract.leases_by_owner({
-    account_id: window.accountId,
+export async function mySubscriptions() {
+  let subs = await window.contract.list_subscriptions_by_subscriber({
+    subscriber_id: window.accountId,
   });
-  return tokens;
+  return subs;
 }
 
-export async function myBorrowings() {
-  let tokens = await window.contract.leases_by_borrower({
-    account_id: window.accountId,
+export async function myPlans() {
+  let plans = await window.contract.list_plans_by_provider({
+    provider_id: window.accountId,
   });
-  return tokens;
+  return plans;
 }
 
-export async function acceptLease(leaseId, rent) {
-  let response = await window.contract.lending_accept({
-    args: {
-      lease_id: leaseId,
-    },
-    amount: (BigInt(rent) + BigInt(1e18)).toString(),
+export async function myBalance() {
+  let balance = await window.contract.get_withdrawable_deposit({
+    account: window.accountId,
+  });
+  return balance;
+}
+
+
+export async function getPlan(planId) {
+  if (planId === null) { return null }
+  let plan = await window.contract.get_plan({
+    plan_id: planId
+  });
+  return plan;
+}
+
+export async function getCollectableFeesForPlan(planId) {
+  if (planId === null) { return null }
+  let amount = await window.contract.view_collectable_fees_per_plan({
+    plan_id: planId
+  });
+  return amount;
+}
+
+
+const BASE = BigInt("10000000000000000000000");
+export async function createPlan(name, cycleLength, priceNear) {
+  let priceYacto = BigInt(Number(priceNear * 100).toFixed(0)) * BASE
+  let args = {
+    provider_id: window.accountId,
+    payment_cycle_length: cycleLength,
+    payment_cycle_rate: priceYacto.toString(),
+    payment_cycle_count: 1,
+    plan_name: name,
+  }
+  let response = await window.contract.create_subscription_plan({
+    args: args,
   });
   return response;
 }
 
-export async function claimBack(leaseId) {
-  let response = await window.contract.claim_back({
+export async function createSubscription(planId) {
+  let response = await window.contract.create_subscription({
     args: {
-      lease_id: leaseId,
+      plan_id: planId,
     },
-    amount: 1,
+  });
+  return response;
+}
+
+export async function cancelSubscription(subscriptionId) {
+  let response = await window.contract.cancel_subscription({
+    args: {
+      subscription_id: subscriptionId,
+    },
+  });
+  return response;
+}
+
+export async function deposit(amountNear) {
+  let amountYacto = BigInt(Number(amountNear * 100).toFixed(0)) * BASE;
+  let response = await window.contract.deposit({
+    args: {
+      subscriber_id: window.accountId,
+    },
+    amount: amountYacto.toString()
+  });
+  return response;
+}
+
+export async function withdraw(amountNear) {
+  let amountYacto;
+  if (amountNear !== null) {
+    amountYacto = (BigInt(Number(amountNear * 100).toFixed(0)) * BASE).toString();
+  } else {
+    amountYacto = null;
+  }
+  let response = await window.contract.withdraw({
+    args: {
+      amount: amountYacto,
+    },
+  });
+  return response;
+}
+
+
+export async function collectFees(planId) {
+  let response = await window.contract.collect_fees({
+    args: {
+      plan_id: planId,
+    },
   });
   return response;
 }

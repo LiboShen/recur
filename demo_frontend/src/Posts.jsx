@@ -1,3 +1,6 @@
+import React from "react";
+import { useNavigate } from "react-router-dom";
+
 const posts = [
   {
     title: 'Web3 2023 landscape predictions',
@@ -53,7 +56,15 @@ function classNames(...classes) {
 }
 
 export default function Example() {
-  return (
+  const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (!window.walletConnection.isSignedIn()) {
+      navigate("/")
+    }
+  }, []);
+
+  return window.isMember === true ? (
     <div className="bg-white px-4 pt-16 pb-20 sm:px-6 lg:px-8 lg:pt-24 lg:pb-28">
       <div className="relative mx-auto max-w-lg divide-y-2 divide-gray-200 lg:max-w-7xl">
         <div>
@@ -105,5 +116,15 @@ export default function Example() {
         </div>
       </div>
     </div>
-  )
+  ) : (window.isMember === false) ? (
+    <div className="bg-white px-4 pt-16 pb-20 sm:px-6 lg:px-8 lg:pt-24 lg:pb-28">
+      <div className="relative mx-auto max-w-lg lg:max-w-7xl">
+        <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl"> Access Denied 🙅 </h2>
+        <p className="mt-3 text-xl text-gray-500 sm:mt-4">
+          The research reports are only accessible to the BUIDL club members. Please see the <a className="text-indigo-600" href="/pricing">prcing page</a> for how to join.
+        </p>
+      </div>
+    </div>
+
+  ) : null
 }

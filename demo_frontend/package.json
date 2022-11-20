@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "license": "(MIT AND Apache-2.0)",
   "scripts": {
-    "start": "env-cmd -f ../demo_nft_contract/neardev/dev-account.env vite",
-    "build": "CONTRACT_NAME=nft-rental.near vite build && yarn netlify_redirects",
-    "build_testnet": "CONTRACT_NAME=tamagotchi-nft.testnet vite build -m testnet && yarn netlify_redirects",
-    "build_mainnet": "CONTRACT_NAME=nft-rental.near vite build -m mainnet && yarn netlify_redirects",
+    "start": "env-cmd -f ../contract/neardev/dev-account.env vite",
+    "build": "CONTRACT_NAME=recurr.near vite build && yarn netlify_redirects",
+    "build_testnet": "CONTRACT_NAME=recurr.testnet vite build -m testnet && yarn netlify_redirects",
+    "build_mainnet": "CONTRACT_NAME=recurr.near vite build -m mainnet && yarn netlify_redirects",
     "netlify_redirects": "echo \"/* /index.html 200\" > dist/_redirects"
   },
   "devDependencies": {
