@@ -183,21 +183,43 @@ impl Contract {
         subscription_id: &SubscriptionID,
         charge_ts: Option<u64>,
     ) -> bool {
-        //check deposit
-        //check currrent cost
-        //compare
-        // TODO(Steven): inspect the handling of different subscription state.
+        // check deposit
+        // check currrent cost
+        // compare
+        // TODO(Steven): inspect the handling of subscription state: Canceled.
 
         let subscription = self
             .subscription_by_id
             .get(subscription_id)
             .expect("No such subscription!");
 
-        // TODO: inspect and fix duplicate cost calcuations
-        let deposit = self.get_withdrawable_deposit(&subscription.subscriber_id);
-        let cost = self.calcuate_subscription_incurred_cost(subscription_id, charge_ts);
+        if subscription.state == SubscriptionState::Invalid {
+            return false;
+        }
 
-        return deposit >= cost;
+        // TODO: inspect and fix duplicate cost calcuations
+
+        let balance = self
+            .deposit_by_account
+            .get(&subscription.subscriber_id)
+            .unwrap_or(0);
+        let total_fees = self.calculate_total_fees_for_subscriber(&subscription.subscriber_id);
+
+        return balance >= total_fees;
+    }
+
+    pub fn find_valid_subscription(
+        &self,
+        subscriber_id: AccountId,
+        plan_id: SubscriptionPlanID,
+    ) -> Option<SubscriptionID> {
+        // TODO(Steven): check for validate/active subscription
+        for (id, sub) in self.list_subscriptions_by_subscriber(subscriber_id) {
+            if sub.plan_id == plan_id && self.validate_subscription(&id, None) {
+                return Some(id);
+            }
+        }
+        return None;
     }
 
     // viewing function. The withdrawble amount is a dynamic value and updates in real time.
@@ -260,7 +282,7 @@ impl Contract {
             .unwrap();
 
         // Find charge charge_duration
-        let mut charge_start_ts: u64 = 0;
+        let charge_start_ts: u64;
 
         // if end_ts is not given, using the current ts
         let mut charge_end_ts = end_ts.unwrap_or_else(env::block_timestamp);
@@ -459,11 +481,15 @@ impl Contract {
 
         for sub_result in sorted_subs.iter() {
             // TODO(libo): provide a test to demo the charge ordering problem.
-            pseudo_deposit = max(0, pseudo_deposit - sub_result.incurred_fees);
             if sub_result.subscription_id.eq(subscription_id) {
                 let fund_for_sub = min(pseudo_deposit, sub_result.incurred_fees);
                 return (fund_for_sub, sub_result.incurred_fees);
             }
+            pseudo_deposit = if pseudo_deposit > sub_result.incurred_fees {
+                pseudo_deposit - sub_result.incurred_fees
+            } else {
+                0
+            };
             if pseudo_deposit <= 0 {
                 return (0, sub_result.incurred_fees);
             }
@@ -508,7 +534,7 @@ pub trait SubscriberActions {
     // TODO: support multi FTs
     fn deposit(&mut self, subscriber_id: AccountId);
 
-    fn withdraw(&mut self, amount: Option<u128>);
+    fn withdraw(&mut self, amount: Option<U128>);
 }
 
 #[near_bindgen]
@@ -824,7 +850,7 @@ impl SubscriberActions for Contract {
 
     // function to withdraw unlocked deposit
     #[payable]
-    fn withdraw(&mut self, amount: Option<u128>) {
+    fn withdraw(&mut self, amount: Option<U128>) {
         // 1. get valid deposit
         // 2. when no input amount is given, set asking_amount to available_fund
         // if asking_amount < available_fund:
@@ -837,7 +863,7 @@ impl SubscriberActions for Contract {
         let withdrawable_fund = self.get_withdrawable_deposit(&user_id);
 
         // if no input amount is given, withdarw all available fund
-        let asking_amount = amount.unwrap_or(withdrawable_fund);
+        let asking_amount = amount.map_or(withdrawable_fund, |a| a.0);
 
         // panic if not enough fund!
         assert!(withdrawable_fund >= asking_amount, "Not enough fund!");
