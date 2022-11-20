@@ -5,27 +5,42 @@
 yarn deploy
 
 export SERVICE_CONTRACT_OWNER=ty_dev.testnet
+export RECUR_SERVICE_CONTRACT_OWNER=recur.ty_dev.testnet
 export SUBSCRIBER_ID=crypto_ty.testnet
 export SUBSCRIBER_ID_2=ty_dev_3.testnet
 export PROVIDER_ID=ty_dev_2.testnet
-export CONTRACT_ADDR=dev-1668677946314-54468871935084
+//export CONTRACT_ADDR=dev-1668677946314-54468871935084
+export CONTRACT_ADDR=$RECUR_SERVICE_CONTRACT_OWNER
+
+export PLAN_ID=Cd4f7hz2AU8qZWBSYvv4AUXFCzBSs7CA4DKfrNPvjZGpkVFG
+export SUBSCRIPTION_ID=koFB4hKzwutqExxe7d2MzG63wUYJvZ5vvenM4ZPp5yyi25eS6
+
+one_near = 1000000000000000000000000
+
+export 
 
 plan_id_1 = Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8
 sub_id_1 = "koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
 
 near state &PROVIDER_ID // check account balance
 
+
 /* Singler Subscriber & Single Provider*/
 // initialise a contract
 near call dev-1668677946314-54468871935084 new '{"owner_id": "'$SERVICE_CONTRACT_OWNER'"}' --accountId $SERVICE_CONTRACT_OWNER
 
+// create a sub account and deploy the contract & initialisation
+near create-account recur.$SERVICE_CONTRACT_OWNER --masterAccount $SERVICE_CONTRACT_OWNER --initialBalance 25
+yarn build && cd contract && near deploy --wasmFile ./target/wasm32-unknown-unknown/release/recur.wasm --accountId $RECUR_SERVICE_CONTRACT_OWNER
+near call $RECUR_SERVICE_CONTRACT_OWNER new '{"owner_id": "'$RECUR_SERVICE_CONTRACT_OWNER'"}' --accountId $RECUR_SERVICE_CONTRACT_OWNER
+
 // Provider: Test Create a Plan -- SUCCEEDED plan-id:Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8
 near call $CONTRACT_ADDR create_subscription_plan '{
     "provider_id":"'$PROVIDER_ID'",
-    "payment_cycle_length":60,
-    "payment_cycle_rate":1,
+    "payment_cycle_length":600,
+    "payment_cycle_rate":"10000000000000000000000",
     "payment_cycle_count":5,
-    "plan_name":"test_plan_1"
+    "plan_name":"recur_plan_1"
   }' --accountId $PROVIDER_ID
 
 // Provider: collect fees -- FAILED
@@ -33,6 +48,10 @@ near call $CONTRACT_ADDR collect_fees '{
   "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
   }' --accountId $PROVIDER_ID
 
+Contrac
+
+// Contract: View all plans -- 
+near call $CONTRACT_ADDR list_all_plans --accountId $RECUR_SERVICE_CONTRACT_OWNER
 
 // Contract: View existing plan -- SUCCEEDED
 near call $CONTRACT_ADDR get_plan '{
@@ -84,7 +103,7 @@ near call $CONTRACT_ADDR calculate_total_fees_for_subscriber '{
 // Subscriber: deposit -- SUCCEEDED
 near call $CONTRACT_ADDR deposit '{
   "subscriber_id": "'$SUBSCRIBER_ID_2'"
-  }' --accountId $SUBSCRIBER_ID --depositYocto 100000000000000000000000
+  }' --accountId $SUBSCRIBER_ID --depositYocto 1000000000000000000000000
 
 
 // Subscriber: Creat a subscripton & Panic if not enough subscription -- SUCCEEDED
@@ -95,7 +114,7 @@ near call $CONTRACT_ADDR create_subscription '{
 
 // Subscriber: Creat a subscripton when enough deposit -- SUCCEEDED (sub_id:koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T)
 near call $CONTRACT_ADDR create_subscription '{
-    "plan_id":"Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+    "plan_id":"'$PLAN_ID'"
   }' --accountId $SUBSCRIBER_ID 
 
 
@@ -109,7 +128,7 @@ near call $CONTRACT_ADDR withdraw '{
 
 // Subscriber: calculate subscription cost -- SUCCEEDED
 near call $CONTRACT_ADDR calcuate_subscription_incurred_cost '{
-    "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+    "subscription_id":"'$SUBSCRIPTION_ID'"
   }' --accountId $SUBSCRIBER_ID 
 
 //Subscriber: cancel subscription & fee stop change-- SUCCEEDED
@@ -124,7 +143,7 @@ near call $CONTRACT_ADDR calculate_total_fees_for_subscriber '{
 
 
 near call $CONTRACT_ADDR get_available_fund_for_subscription '{
-    "subscription_id":"koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+    "subscription_id":"'$SUBSCRIPTION_ID'"
   }' --accountId $SUBSCRIBER_ID 
 
 
@@ -211,13 +230,13 @@ near call $CONTRACT_ADDR view_collectable_fees_per_provider '{
 
 // Contract: View collectale fee of a plan
 near call $CONTRACT_ADDR view_collectable_fees_per_plan '{
-  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  "plan_id": "'$PLAN'"
   }' --accountId $SERVICE_CONTRACT_OWNER
 
 
 // Provider: collect fees -- FAILED
 near call $CONTRACT_ADDR collect_fees '{
-  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  "plan_id": "'$PLAN_ID'"
   }' --accountId $PROVIDER_ID
 
 
@@ -239,14 +258,14 @@ near call $CONTRACT_ADDR list_plans_by_provider '{
 
 
 // Contract: get deposit of a user -- SUCCEEDED
-near call $CONTRACT_ADDR get_unlocked_deposit '{
+near call $CONTRACT_ADDR get_withdrawable_deposit '{
   "account": "'$SUBSCRIBER_ID'"
-  }' --accountId $SUBSCRIBER_ID
+  }' --accountId $RECUR_SERVICE_CONTRACT_OWNER
 
 // Contract: get total fund of a user -- SUCCEEDED
 near call $CONTRACT_ADDR get_account_balance '{
   "account": "'$SUBSCRIBER_ID'"
-  }' --accountId $SUBSCRIBER_ID
+  }' --accountId $RECUR_SERVICE_CONTRACT_OWNER
 
 //Contract: cancel subscription & panic -- SUCCEEDED
 near call $CONTRACT_ADDR cancel_subscription '{
@@ -255,7 +274,7 @@ near call $CONTRACT_ADDR cancel_subscription '{
 
 //Contract: get a subscription -- SUCCEEDED
 near call $CONTRACT_ADDR get_subscription '{
-  "subscription_id": "koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  "subscription_id": "'$SUBSCRIPTION_ID'"
   }' --accountId $SUBSCRIBER_ID
 
 //Contract: get all subscriptions from a user -- SUCCEEDED
@@ -265,7 +284,7 @@ near call $CONTRACT_ADDR list_subscriptions_by_subscriber '{
 
 //Contract: validate a subscription -- SUCCEEDED
 near call $CONTRACT_ADDR validate_subscription '{
-  "subscription_id": "koFB4hKzwutqExxe7d2MzG63wUYJvUEhfwD4ohY6mrqgWob3T"
+  "subscription_id": "'$SUBSCRIBER_ID'"
   }' --accountId $SERVICE_CONTRACT_OWNER
 
 // Contract: check total fee for a subscriber -- SUCCEEDED
@@ -345,7 +364,7 @@ near call $CONTRACT_ADDR calcuate_subscription_incurred_cost '{
   }' --accountId $SUBSCRIBER_ID 
 
 near call $CONTRACT_ADDR collect_fees '{
-  "plan_id": "Cd4f7hz2AU8qZWBSYvv4AUXFCzBSnFxKXELALMXfpLrexoc8"
+  "plan_id": "'$PLAN_ID'"
   }' --accountId $PROVIDER_ID
 
 // cancel subscription -- SUCCEEDED
