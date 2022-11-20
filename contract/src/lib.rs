@@ -1,7 +1,7 @@
 // TODO: Beneficier
 // TODO: NFT contract
 // TODO: Support Multi FTs
-// TODO: Revist if we need a state for user. E.g. if a user has unsettled payment, 
+// TODO: Revist if we need a state for user. E.g. if a user has unsettled payment,
 //       he should not be allowed to create new subscriptions
 
 use near_contract_standards::non_fungible_token::hash_account_id;
@@ -48,7 +48,7 @@ pub struct SubscriptionPlan {
     provider_id: AccountId, // plan provider
     //TODO: beneficier: AccountId,
     payment_cycle_length: u64, // base payment cycle (e.g. hour, day, week) in the unit of seconds.
-    payment_cycle_rate: u128,  // cost for 1 payment cycle
+    payment_cycle_rate_yocto: u128, // cost for 1 payment cycle. In the unit of yocto
     payment_cycle_count: u64,  // total number of payments. 0 represents indefinte plan
     // allow_grace_period: u64,    // TODO: grace period in seconds
     plan_name: Option<String>, // name of the plan
@@ -143,6 +143,36 @@ impl Contract {
         return results;
     }
 
+    // viewing function to list all plans
+    pub fn list_all_plans(&self) -> Vec<(SubscriptionPlanID, SubscriptionPlan)> {
+        assert!(
+            env::predecessor_account_id() == self.owner,
+            "Only service owner can check all plans!"
+        );
+
+        let mut results: Vec<(SubscriptionPlanID, SubscriptionPlan)> = vec![];
+
+        for (id, plan) in self.subscription_plan_by_id.iter() {
+            results.push((id, plan));
+        }
+        return results;
+    }
+
+    // viewing function to list all subscriptions
+    pub fn list_all_subscriptions(&self) -> Vec<(SubscriptionID, Subscription)> {
+        assert!(
+            env::predecessor_account_id() == self.owner,
+            "Only service owner can check all subscriptions!"
+        );
+
+        let mut results: Vec<(SubscriptionID, Subscription)> = vec![];
+
+        for (id, sub) in self.subscription_by_id.iter() {
+            results.push((id, sub));
+        }
+        return results;
+    }
+
     // get all subscriptions of a user
     pub fn list_subscriptions_by_subscriber(
         &self,
@@ -186,7 +216,7 @@ impl Contract {
         //check deposit
         //check currrent cost
         //compare
-        // TODO(Steven): inspect the handling of different subscription state. 
+        // TODO(Steven): inspect the handling of different subscription state.
 
         let subscription = self
             .subscription_by_id
@@ -240,6 +270,7 @@ impl Contract {
         end_ts: Option<u64>,
     ) -> u128 {
         /* end_ts represents the charge period stop ts. if not given, default to current ts
+            return the cost in yocto
         Decide charge duration:
         1. Active Subscription:
               charge_start_ts needs to consider upfront payment
@@ -259,7 +290,7 @@ impl Contract {
             .get(&subscription.plan_id)
             .unwrap();
 
-        // Find charge charge_duration
+        // Find charge_duration
         let mut charge_start_ts: u64 = 0;
 
         // if end_ts is not given, using the current ts
@@ -292,7 +323,7 @@ impl Contract {
         let charge_duration = charge_end_ts - charge_start_ts;
         let count_payment_cycles = charge_duration / &plan.payment_cycle_length / SECONDS_TO_NANO;
 
-        let cost = (count_payment_cycles as u128) * &plan.payment_cycle_rate;
+        let cost = (count_payment_cycles as u128) * &plan.payment_cycle_rate_yocto;
 
         return cost;
     }
@@ -307,7 +338,7 @@ impl Contract {
         let subscription_ids = self
             .subscriptions_per_subscriber
             .get(&subscriber_id)
-            .expect("No subscriptions to charge!");
+            .map_or(vec![], |x| UnorderedSet::to_vec(&x));;
 
         for subscription_id in subscription_ids.iter() {
             total_fees += self.calcuate_subscription_incurred_cost(&subscription_id, None);
@@ -467,7 +498,6 @@ impl Contract {
 
         // if no sub result is returned, there must be error in finding target sub's fund.
         env::panic_str("Sorted subscriptions result is empty");
-
     }
 }
 
@@ -553,7 +583,7 @@ impl ProviderActions for Contract {
         let a_plan = SubscriptionPlan {
             provider_id: provider_id,
             payment_cycle_length: payment_cycle_length,
-            payment_cycle_rate: payment_cycle_rate,
+            payment_cycle_rate_yocto: payment_cycle_rate,
             payment_cycle_count: payment_cycle_count,
             plan_name: plan_name,
             //prev_charge_ts: prev_charge_ts,
@@ -633,9 +663,9 @@ impl ProviderActions for Contract {
                 // cancel the subscription if the fund is not enough.
                 // charge will still be taken in the following steps
                 self.cancel_subscription(&subscription_id);
-                
+
                 // TODO: Revisit if whe should immediately invalidate the subscription when fund becomes insufficient.
-                // Reasoning: if someone missed a payment before, they shouldn't be served even within this cycle. 
+                // Reasoning: if someone missed a payment before, they shouldn't be served even within this cycle.
                 // But to make the logic fair, we also need to avoid partial payment
             }
 
@@ -722,9 +752,9 @@ impl SubscriberActions for Contract {
         // check validate deposit : deposit should cover at least the 1st paymen
         let valid_deposit = self.get_withdrawable_deposit(&subscriber);
         assert!(
-            valid_deposit >= plan.payment_cycle_rate,
-            "Deposit is not enough for first payment {rate}",
-            rate = &plan.payment_cycle_rate
+            valid_deposit >= plan.payment_cycle_rate_yocto,
+            "Deposit is not enough for first payment {rate} yocto",
+            rate = &plan.payment_cycle_rate_yocto
         );
 
         // generate an id
