@@ -11,8 +11,7 @@ use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
 use near_sdk::json_types::U128;
 use near_sdk::serde::Serialize;
 use near_sdk::{
-    env, log, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault,
-    Promise,
+    env, near_bindgen, AccountId, Balance, BorshStorageKey, CryptoHash, PanicOnDefault, Promise,
 };
 
 use std::cmp::max;
@@ -48,8 +47,8 @@ enum SubscriptionState {
 pub struct SubscriptionPlan {
     provider_id: AccountId, // plan provider
     //TODO: beneficier: AccountId,
-    payment_cycle_length: u64, // base payment cycle (e.g. hour, day, week) in the unit of seconds.
-    payment_cycle_rate: u128,  // cost for 1 payment cycle
+    payment_cycle_length_s: u64, // base payment cycle (e.g. hour, day, week) in the unit of seconds.
+    payment_cycle_rate_yocto: u128, // cost for 1 payment cycle. In the unit of yocto
     payment_cycle_count: u64,  // total number of payments. 0 represents indefinte plan
     // allow_grace_period: u64,    // TODO: grace period in seconds
     plan_name: Option<String>, // name of the plan
@@ -129,6 +128,7 @@ impl Contract {
     }
 
     // get all subscriptions of a given plan
+    // TODO: results can be a None. Return an option
     pub fn list_subscriptions_by_plan_id(
         &self,
         plan_id: SubscriptionPlanID,
@@ -138,6 +138,36 @@ impl Contract {
         let ids = self.subscription_ids_by_plan_id.get(&plan_id).unwrap();
         for id in ids.iter() {
             let sub = self.subscription_by_id.get(&id).unwrap();
+            results.push((id, sub));
+        }
+        return results;
+    }
+
+    // viewing function to list all plans
+    pub fn list_all_plans(&self) -> Vec<(SubscriptionPlanID, SubscriptionPlan)> {
+        assert!(
+            env::predecessor_account_id() == self.owner,
+            "Only service owner can check all plans!"
+        );
+
+        let mut results: Vec<(SubscriptionPlanID, SubscriptionPlan)> = vec![];
+
+        for (id, plan) in self.subscription_plan_by_id.iter() {
+            results.push((id, plan));
+        }
+        return results;
+    }
+
+    // viewing function to list all subscriptions
+    pub fn list_all_subscriptions(&self) -> Vec<(SubscriptionID, Subscription)> {
+        assert!(
+            env::predecessor_account_id() == self.owner,
+            "Only service owner can check all subscriptions!"
+        );
+
+        let mut results: Vec<(SubscriptionID, Subscription)> = vec![];
+
+        for (id, sub) in self.subscription_by_id.iter() {
             results.push((id, sub));
         }
         return results;
@@ -240,6 +270,7 @@ impl Contract {
         end_ts: Option<u64>,
     ) -> u128 {
         /* end_ts represents the charge period stop ts. if not given, default to current ts
+            return the cost in yocto
         Decide charge duration:
         1. Active Subscription:
               charge_start_ts needs to consider upfront payment
@@ -259,7 +290,7 @@ impl Contract {
             .get(&subscription.plan_id)
             .unwrap();
 
-        // Find charge charge_duration
+        // Find charge_duration
         let mut charge_start_ts: u64 = 0;
 
         // if end_ts is not given, using the current ts
@@ -274,7 +305,7 @@ impl Contract {
                 // if no charge has been taken before, treat start_ts as one cycle earlier, to achive upfront payment
                 charge_start_ts = max(
                     subscription.prev_charge_ts,
-                    sub_start_ts - &plan.payment_cycle_length * SECONDS_TO_NANO,
+                    sub_start_ts - &plan.payment_cycle_length_s * SECONDS_TO_NANO,
                 );
             }
             SubscriptionState::Canceled { ts: canceled_ts } => {
@@ -290,9 +321,9 @@ impl Contract {
         }
 
         let charge_duration = charge_end_ts - charge_start_ts;
-        let count_payment_cycles = charge_duration / &plan.payment_cycle_length / SECONDS_TO_NANO;
+        let count_payment_cycles = charge_duration / &plan.payment_cycle_length_s / SECONDS_TO_NANO;
 
-        let cost = (count_payment_cycles as u128) * &plan.payment_cycle_rate;
+        let cost = (count_payment_cycles as u128) * &plan.payment_cycle_rate_yocto;
 
         return cost;
     }
@@ -304,11 +335,10 @@ impl Contract {
         //2. accumulate fees from all subscriptions
 
         let mut total_fees: u128 = 0;
-
         let subscription_ids = self
             .subscriptions_per_subscriber
             .get(&subscriber_id)
-            .unwrap_or(UnorderedSet::new(b"s"));
+            .map_or(vec![], |x| UnorderedSet::to_vec(&x));;
 
         for subscription_id in subscription_ids.iter() {
             total_fees += self.calcuate_subscription_incurred_cost(&subscription_id, None);
@@ -346,7 +376,7 @@ impl Contract {
                 // mark the prev charge ts to be one cycle earlier than sub_start_ts to enforce upfront payment
                 // otherwise use the prev_charge_ts
                 if subscription.prev_charge_ts == 0 {
-                    subscription.prev_charge_ts = sub_start_ts - plan.payment_cycle_length;
+                    subscription.prev_charge_ts = sub_start_ts - plan.payment_cycle_length_s;
                 }
                 // update subscription state to Canceled
                 subscription.state = SubscriptionState::Canceled {
@@ -358,10 +388,7 @@ impl Contract {
                     .insert(subscription_id, &subscription);
             }
             SubscriptionState::Canceled { ts: _ } => {
-                log!(
-                    "Subsription has already been canceled. No action. subscription_id: {}",
-                    &subscription_id
-                )
+                env::panic_str("Only Active Subsription can be canceled")
             }
             SubscriptionState::Invalid => env::panic_str("Only Active Subsription can be canceled"),
         }
@@ -399,7 +426,7 @@ impl Contract {
 
         let mut due_ts: u64 = 0;
         if sub.prev_charge_ts > 0 {
-            due_ts = sub.prev_charge_ts + plan.payment_cycle_length;
+            due_ts = sub.prev_charge_ts + plan.payment_cycle_length_s;
         } else if let SubscriptionState::Active { ts: start_ts } = sub.state {
             due_ts = start_ts;
         }
@@ -508,7 +535,7 @@ pub trait SubscriberActions {
     // TODO: support multi FTs
     fn deposit(&mut self, subscriber_id: AccountId);
 
-    fn withdraw(&mut self, amount: Option<u128>);
+    fn withdraw(&mut self, amount: Option<U128>);
 }
 
 #[near_bindgen]
@@ -555,8 +582,8 @@ impl ProviderActions for Contract {
         // initiate the struct and return
         let a_plan = SubscriptionPlan {
             provider_id: provider_id,
-            payment_cycle_length: payment_cycle_length,
-            payment_cycle_rate: payment_cycle_rate,
+            payment_cycle_length_s: payment_cycle_length,
+            payment_cycle_rate_yocto: payment_cycle_rate,
             payment_cycle_count: payment_cycle_count,
             plan_name: plan_name,
             //prev_charge_ts: prev_charge_ts,
@@ -610,12 +637,6 @@ impl ProviderActions for Contract {
             .get(&plan_id)
             .expect("No such plan!");
 
-        assert!(
-            plan.provider_id == env::predecessor_account_id()
-                || self.owner == env::predecessor_account_id(),
-            "Only the Provider or Service owner can collect fees for the provider"
-        );
-
         let subscription_ids = self
             .subscription_ids_by_plan_id
             .get(&plan_id)
@@ -634,7 +655,7 @@ impl ProviderActions for Contract {
                 continue;
             }
 
-            // 2.2 get the available fund for this subscription and incurred fees
+            // 2.2 get the available fund for this subsciption and incurred fees
             let (available_fund, incurred_fees) =
                 self.get_available_fund_for_subscription(&subscription_id);
 
@@ -728,17 +749,12 @@ impl SubscriberActions for Contract {
             .get(&plan_id)
             .expect("No such plan!");
 
-        assert!(
-            plan.provider_id != env::predecessor_account_id(),
-            "Provider can't subscribe to its own plan!"
-        );
-
         // check validate deposit : deposit should cover at least the 1st paymen
         let valid_deposit = self.get_withdrawable_deposit(&subscriber);
         assert!(
-            valid_deposit >= plan.payment_cycle_rate,
-            "Deposit is not enough for first payment {rate}",
-            rate = &plan.payment_cycle_rate
+            valid_deposit >= plan.payment_cycle_rate_yocto,
+            "Deposit is not enough for first payment {rate} yocto",
+            rate = &plan.payment_cycle_rate_yocto
         );
 
         // generate an id
@@ -824,7 +840,7 @@ impl SubscriberActions for Contract {
 
     // function to withdraw unlocked deposit
     #[payable]
-    fn withdraw(&mut self, amount: Option<u128>) {
+    fn withdraw(&mut self, amount: Option<U128>) {
         // 1. get valid deposit
         // 2. when no input amount is given, set asking_amount to available_fund
         // if asking_amount < available_fund:
@@ -837,7 +853,10 @@ impl SubscriberActions for Contract {
         let withdrawable_fund = self.get_withdrawable_deposit(&user_id);
 
         // if no input amount is given, withdarw all available fund
-        let asking_amount = amount.unwrap_or(withdrawable_fund);
+        let mut asking_amount:u128 = withdrawable_fund;
+        if let Some(input_amount) = amount{
+            asking_amount = input_amount.0;
+        } 
 
         // panic if not enough fund!
         assert!(withdrawable_fund >= asking_amount, "Not enough fund!");
