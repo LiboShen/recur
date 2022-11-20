@@ -535,7 +535,7 @@ pub trait SubscriberActions {
     // TODO: support multi FTs
     fn deposit(&mut self, subscriber_id: AccountId);
 
-    fn withdraw(&mut self, amount: Option<u128>);
+    fn withdraw(&mut self, amount: Option<U128>);
 }
 
 #[near_bindgen]
@@ -840,7 +840,7 @@ impl SubscriberActions for Contract {
 
     // function to withdraw unlocked deposit
     #[payable]
-    fn withdraw(&mut self, amount: Option<u128>) {
+    fn withdraw(&mut self, amount: Option<U128>) {
         // 1. get valid deposit
         // 2. when no input amount is given, set asking_amount to available_fund
         // if asking_amount < available_fund:
@@ -853,7 +853,10 @@ impl SubscriberActions for Contract {
         let withdrawable_fund = self.get_withdrawable_deposit(&user_id);
 
         // if no input amount is given, withdarw all available fund
-        let asking_amount = amount.unwrap_or(withdrawable_fund);
+        let mut asking_amount:u128 = withdrawable_fund;
+        if let Some(input_amount) = amount{
+            asking_amount = input_amount.0;
+        } 
 
         // panic if not enough fund!
         assert!(withdrawable_fund >= asking_amount, "Not enough fund!");
