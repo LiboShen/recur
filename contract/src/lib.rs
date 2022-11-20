@@ -183,9 +183,9 @@ impl Contract {
         subscription_id: &SubscriptionID,
         charge_ts: Option<u64>,
     ) -> bool {
-        //check deposit
-        //check currrent cost
-        //compare
+        // check deposit
+        // check currrent cost
+        // compare
         // TODO(Steven): inspect the handling of subscription state: Canceled.
 
         let subscription = self
@@ -213,6 +213,7 @@ impl Contract {
         subscriber_id: AccountId,
         plan_id: SubscriptionPlanID,
     ) -> Option<SubscriptionID> {
+        // TODO(Steven): check for validate/active subscription
         for (id, sub) in self.list_subscriptions_by_subscriber(subscriber_id) {
             if sub.plan_id == plan_id && self.validate_subscription(&id, None) {
                 return Some(id);
