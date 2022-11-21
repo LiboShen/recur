@@ -81,6 +81,7 @@ export default function PricingPage() {
                     <div className="rounded-md shadow">
                       <a
                         href={tier.href}
+                        target="_blank"
                         className="flex items-center justify-center rounded-md border border-transparent bg-gray-800 px-5 py-3 text-base font-medium text-white hover:bg-gray-900"
                         aria-describedby="tier-standard"
                       >
