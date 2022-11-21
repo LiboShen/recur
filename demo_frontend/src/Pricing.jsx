@@ -1,9 +1,9 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckIcon } from '@heroicons/react/24/outline'
+import { PLAN_ID } from "./near-api";
 
 const RECUR_HOSTNAME = "https://recur-near.netlify.app"
-const PLAN_ID = "2et2iTwBw8Qq7AkokTsQdYnN2rkTrow46v59oDwdKtb"
 
 const tiers = [
   {
