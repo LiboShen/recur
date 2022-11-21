@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { CheckIcon } from '@heroicons/react/24/outline'
 
-const RECUR_HOSTNAME = "http://localhost:5173"
+const RECUR_HOSTNAME = "https://recur-near.netlify.app"
 const PLAN_ID = "2et2iTwBw8Qq7AkokTsQdYnN2rkTrow46v59oDwdKtb"
 
 const tiers = [
@@ -64,7 +64,7 @@ export default function PricingPage() {
                     </div>
                     <div className="mt-4 flex items-baseline text-6xl font-bold tracking-tight">
                       {tier.priceDaily}
-                      <span className="ml-1 text-2xl font-medium tracking-normal text-gray-500">Ⓝ/day</span>
+                      <span className="ml-1 text-2xl font-medium tracking-normal text-gray-500">Ⓝ/minute</span>
                     </div>
                   </div>
                   <div className="flex flex-1 flex-col justify-between space-y-6 bg-gray-50 px-6 pt-6 pb-8 sm:p-10 sm:pt-6">
